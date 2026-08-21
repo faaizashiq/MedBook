@@ -21,8 +21,13 @@ export const transporter = nodemailer.createTransport({
   },
 })
 
-// Verify connection on server initialization
-if (typeof window === 'undefined' && emailUser && emailPass) {
+// Verify connection on server initialization during active runtime (skipped during static build)
+if (
+  typeof window === 'undefined' &&
+  emailUser &&
+  emailPass &&
+  process.env.NEXT_PHASE !== 'phase-production-build'
+) {
   transporter.verify((error) => {
     if (error) {
       console.warn('[SMTP] Connection warning:', error.message)
