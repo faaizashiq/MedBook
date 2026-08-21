@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer'
 import fs from 'fs'
 import path from 'path'
+import { EMAIL_TEMPLATES } from './emailTemplates'
 
 //==============================================
 // TRANSPORTER SETUP
@@ -8,8 +9,10 @@ import path from 'path'
 
 const emailHost = process.env.EMAIL_HOST || process.env.SMTP_HOST || 'smtp.gmail.com'
 const emailPort = Number(process.env.EMAIL_PORT || process.env.SMTP_PORT) || 587
-const emailUser = process.env.EMAIL_USER || process.env.SMTP_USER
-const emailPass = process.env.EMAIL_PASSWORD || process.env.SMTP_PASS
+const emailUser =
+  process.env.EMAIL_USER || process.env.SMTP_USER || 'medbook.application@gmail.com'
+const emailPass =
+  process.env.EMAIL_PASSWORD || process.env.SMTP_PASS || 'npbhnlcojrmmtzap'
 
 export const transporter = nodemailer.createTransport({
   host: emailHost,
@@ -18,6 +21,9 @@ export const transporter = nodemailer.createTransport({
   auth: {
     user: emailUser,
     pass: emailPass,
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
 })
 
@@ -69,26 +75,40 @@ export function renderTemplate(
   variables: Record<string, string | undefined>
 ): string {
   const cleanName = templateName.replace(/\.html$/, '')
-  const templatePath = path.join(
-    process.cwd(),
-    'app',
-    'Email',
-    'templates',
-    `${cleanName}.html`
-  )
 
-  if (!fs.existsSync(templatePath)) {
-    console.error(`[Email] Template not found at: ${templatePath}`)
+  // 1. First check embedded TypeScript templates (100% reliable on Vercel Serverless)
+  let html = EMAIL_TEMPLATES[cleanName]
+
+  // 2. Fallback to filesystem if not in dictionary
+  if (!html) {
+    try {
+      const templatePath = path.join(
+        process.cwd(),
+        'app',
+        'Email',
+        'templates',
+        `${cleanName}.html`
+      )
+      if (fs.existsSync(templatePath)) {
+        html = fs.readFileSync(templatePath, 'utf8')
+      }
+    } catch (e) {
+      // Ignored
+    }
+  }
+
+  if (!html) {
+    console.error(`[Email] Template "${cleanName}" not found.`)
     throw new Error(`Email template "${cleanName}" not found.`)
   }
 
-  let html = fs.readFileSync(templatePath, 'utf8')
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL || 'https://med-book-app.vercel.app'
   const mergedVariables: Record<string, string> = {
     current_year: new Date().getFullYear().toString(),
     dashboard_url: `${appUrl}/patient`,
     browse_doctors_url: `${appUrl}/doctors`,
+    doctors_url: `${appUrl}/doctors`,
     ...Object.fromEntries(
       Object.entries(variables).filter(([_, v]) => v !== undefined) as [string, string][]
     ),
