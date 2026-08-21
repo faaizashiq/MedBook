@@ -102,8 +102,7 @@ export function renderTemplate(
     throw new Error(`Email template "${cleanName}" not found.`)
   }
 
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL || 'https://med-book-app.vercel.app'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const mergedVariables: Record<string, string> = {
     current_year: new Date().getFullYear().toString(),
     dashboard_url: `${appUrl}/patient`,
