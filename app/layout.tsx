@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth/authContext'
 import { Navbar } from '@/components/layout/Navbar'
+import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister'
+import { PwaInstallPrompt } from '@/components/pwa/PwaInstallPrompt'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -23,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://medbook.app',
+    url: 'https://med-book-app.vercel.app',
     siteName: 'MedBook',
     title: 'MedBook — Find & Book Trusted Doctors',
     description: 'Connect with trusted healthcare professionals anytime, anywhere.',
@@ -65,10 +67,12 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-background antialiased flex flex-col">
         <AuthProvider>
+          <ServiceWorkerRegister />
           <Navbar />
           <div className="flex-1 flex flex-col">
             {children}
           </div>
+          <PwaInstallPrompt />
         </AuthProvider>
       </body>
     </html>

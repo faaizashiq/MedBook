@@ -5,12 +5,13 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'MedBook — Find & Book Trusted Doctors',
     short_name: 'MedBook',
     description:
-      'Connect with trusted healthcare professionals anytime, anywhere.',
+      'Connect with verified healthcare professionals and manage consultation appointments on MedBook.',
     start_url: '/',
+    id: '/',
     display: 'standalone',
+    orientation: 'portrait',
     background_color: '#F8FAFE',
     theme_color: '#2563EB',
-    orientation: 'portrait',
     categories: ['medical', 'health', 'lifestyle'],
     icons: [
       {
@@ -26,6 +27,28 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any',
       },
     ],
-    screenshots: [],
+    shortcuts: [
+      {
+        name: 'Find Doctors',
+        short_name: 'Doctors',
+        description: 'Browse and book specialists',
+        url: '/doctors',
+        icons: [{ src: '/pwa/icon-192.png', sizes: '192x192' }],
+      },
+      {
+        name: 'My Appointments',
+        short_name: 'Appointments',
+        description: 'View scheduled consultations',
+        url: '/patient',
+        icons: [{ src: '/pwa/icon-192.png', sizes: '192x192' }],
+      },
+      {
+        name: 'Doctor Portal',
+        short_name: 'Doctor',
+        description: 'Manage practice & patients',
+        url: '/doctor',
+        icons: [{ src: '/pwa/icon-192.png', sizes: '192x192' }],
+      },
+    ],
   }
 }
