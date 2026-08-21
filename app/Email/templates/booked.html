@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Appointment Request Submitted</title>
+</head>
+
+<body style="margin:0; padding:0; background:#f5f9fc; font-family:Arial, Helvetica, sans-serif; color:#172b4d;">
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f9fc; padding:40px 16px;">
+        <tr>
+            <td align="center">
+
+                <table width="600" cellpadding="0" cellspacing="0" border="0"
+                    style="max-width:600px; width:100%; background:#ffffff; border-radius:16px; overflow:hidden;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding:28px 32px; background:linear-gradient(135deg,#2563eb,#0ea5a4);">
+                            <h1 style="margin:0; color:#ffffff; font-size:26px;">
+                                MedBook
+                            </h1>
+
+                            <p style="margin:6px 0 0; color:#eaf4ff; font-size:14px;">
+                                Healthcare appointments made simple
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding:36px 32px;">
+
+                            <h2 style="margin:0 0 12px; font-size:22px;">
+                                Appointment request submitted
+                            </h2>
+
+                            <p style="margin:0 0 24px; color:#526581; font-size:15px; line-height:1.6;">
+                                Hi {{patient_name}},
+                            </p>
+
+                            <p style="margin:0 0 24px; color:#526581; font-size:15px; line-height:1.6;">
+                                Your appointment request has been successfully submitted.
+                                The appointment is currently waiting for confirmation from the doctor.
+                            </p>
+
+                            <!-- Appointment Card -->
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                                style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px;">
+
+                                <tr>
+                                    <td style="padding:20px;">
+
+                                        <p style="margin:0 0 8px; font-size:13px; color:#64748b;">
+                                            DOCTOR
+                                        </p>
+
+                                        <p style="margin:0 0 18px; font-size:17px; font-weight:bold;">
+                                            Dr. {{doctor_name}}
+                                        </p>
+
+                                        <p style="margin:0 0 6px; font-size:14px;">
+                                            <strong>Date:</strong> {{appointment_date}}
+                                        </p>
+
+                                        <p style="margin:0 0 6px; font-size:14px;">
+                                            <strong>Time:</strong> {{appointment_time}}
+                                        </p>
+
+                                        <p style="margin:0; font-size:14px;">
+                                            <strong>Status:</strong>
+                                            <span style="color:#d97706; font-weight:bold;">
+                                                Pending
+                                            </span>
+                                        </p>
+
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin:24px 0 0; color:#526581; font-size:14px; line-height:1.6;">
+                                You'll receive another email once the doctor confirms or declines your appointment.
+                            </p>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:24px 32px; background:#f8fafc; text-align:center;">
+
+                            <p style="margin:0 0 8px; font-size:13px; color:#64748b;">
+                                © {{current_year}} MedBook
+                            </p>
+
+                            <p style="margin:0; font-size:12px; color:#94a3b8;">
+                                This is an automated email. Please do not reply directly to this message.
+                            </p>
+
+                        </td>
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+
+</html>

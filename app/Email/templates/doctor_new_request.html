@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>New Appointment Request - MedBook</title>
+</head>
+
+<body style="margin:0; padding:0; background:#f5f9fc; font-family:Arial, Helvetica, sans-serif; color:#172b4d;">
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f9fc; padding:40px 16px;">
+        <tr>
+            <td align="center">
+
+                <table width="600" cellpadding="0" cellspacing="0" border="0"
+                    style="max-width:600px; width:100%; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding:28px 32px; background:linear-gradient(135deg,#2563eb,#0ea5a4);">
+                            <h1 style="margin:0; color:#ffffff; font-size:26px; font-weight:bold; letter-spacing:-0.5px;">
+                                MedBook
+                            </h1>
+
+                            <p style="margin:6px 0 0; color:#eaf4ff; font-size:14px;">
+                                Healthcare appointments made simple
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding:36px 32px;">
+
+                            <!-- Notification Icon -->
+                            <table width="56" height="56" cellpadding="0" cellspacing="0" border="0"
+                                style="margin-bottom:20px;">
+                                <tr>
+                                    <td align="center" valign="middle" style="
+                      width:56px;
+                      height:56px;
+                      background:#eff6ff;
+                      border-radius:50%;
+                      color:#2563eb;
+                      font-size:24px;
+                      font-weight:bold;
+                    ">
+                                        🔔
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <h2 style="margin:0 0 12px; font-size:22px; color:#172b4d;">
+                                New appointment request
+                            </h2>
+
+                            <p style="margin:0 0 20px; color:#526581; font-size:15px; line-height:1.6;">
+                                Hi Dr. {{doctor_name}},
+                            </p>
+
+                            <p style="margin:0 0 24px; color:#526581; font-size:15px; line-height:1.6;">
+                                You have received a new appointment booking request from <strong>{{patient_name}}</strong>. Please review the details below and confirm or decline the appointment from your dashboard.
+                            </p>
+
+                            <!-- Appointment Card -->
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                                style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px;">
+
+                                <tr>
+                                    <td style="padding:22px;">
+
+                                        <p style="margin:0 0 8px; font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-weight:bold;">
+                                            PATIENT DETAILS
+                                        </p>
+
+                                        <p style="margin:0 0 18px; font-size:18px; font-weight:bold; color:#172b4d;">
+                                            {{patient_name}}
+                                        </p>
+
+                                        <p style="margin:0 0 8px; font-size:14px; color:#526581;">
+                                            <strong style="color:#172b4d;">Date:</strong> {{appointment_date}}
+                                        </p>
+
+                                        <p style="margin:0 0 8px; font-size:14px; color:#526581;">
+                                            <strong style="color:#172b4d;">Time:</strong> {{appointment_time}}
+                                        </p>
+
+                                        <p style="margin:0 0 8px; font-size:14px; color:#526581;">
+                                            <strong style="color:#172b4d;">Type:</strong> {{consultation_type}}
+                                        </p>
+
+                                        <p style="margin:0; font-size:14px; color:#526581;">
+                                            <strong style="color:#172b4d;">Status:</strong>
+                                            <span style="display:inline-block; padding:3px 10px; margin-left:4px; background:#fef3c7; color:#b45309; border-radius:999px; font-size:12px; font-weight:bold;">
+                                                Pending Confirmation
+                                            </span>
+                                        </p>
+
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Action Button -->
+                            <table cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+                                <tr>
+                                    <td align="center" style="background:#2563eb; border-radius:8px;">
+                                        <a href="{{dashboard_url}}" style="display:inline-block; padding:12px 24px; color:#ffffff; text-decoration:none; font-size:14px; font-weight:bold;">
+                                            Review Request in Dashboard
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin:24px 0 0; color:#64748b; font-size:13px; line-height:1.6;">
+                                Please respond to this booking request at your earliest convenience to keep the patient informed.
+                            </p>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:24px 32px; background:#f8fafc; text-align:center; border-top:1px solid #edf2f7;">
+
+                            <p style="margin:0 0 8px; font-size:13px; color:#64748b;">
+                                © {{current_year}} MedBook Healthcare System
+                            </p>
+
+                            <p style="margin:0; font-size:12px; color:#94a3b8;">
+                                This is an automated notification sent from MedBook.
+                            </p>
+
+                        </td>
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+
+</html>
