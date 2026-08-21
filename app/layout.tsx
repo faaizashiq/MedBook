@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'http://localhost:3000',
+    url: 'https://med-book-app.vercel.app',
     siteName: 'MedBook',
     title: 'MedBook — Find & Book Trusted Doctors',
     description: 'Connect with trusted healthcare professionals anytime, anywhere.',
