@@ -521,7 +521,7 @@ export default function BlogPage() {
                 </h3>
 
                 <p className="mt-3 leading-7 text-slate-600">
-                  You don't need to wait until a concern becomes severe before
+                  You don&apos;t need to wait until a concern becomes severe before
                   discussing it with a healthcare professional. If something
                   about your health is concerning you or a symptom is new and
                   persistent, consider arranging an appointment.

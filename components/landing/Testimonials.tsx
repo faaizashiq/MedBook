@@ -72,7 +72,7 @@ export function Testimonials() {
 
               {/* Text */}
               <p className="text-body-md text-text-secondary leading-relaxed flex-1 italic">
-                "{text}"
+                &ldquo;{text}&rdquo;
               </p>
 
               {/* Specialty tag */}
