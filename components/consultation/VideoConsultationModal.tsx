@@ -127,26 +127,28 @@ export default function VideoConsultationModal({
     setError(null)
     setHasEnded(false)
 
-    // Load Jitsi Meet External API script dynamically
+    const domain = process.env.NEXT_PUBLIC_JITSI_DOMAIN || 'jitsi.riot.im'
+
+    // Load Jitsi Meet External API script dynamically & clean stale scripts
     const loadJitsiScript = (): Promise<void> => {
       return new Promise((resolve, reject) => {
-        if (window.JitsiMeetExternalAPI) {
+        const expectedSrc = `https://${domain}/external_api.js`
+        const existingScript = document.getElementById('jitsi-meet-script') as HTMLScriptElement | null
+
+        if (existingScript && existingScript.src === expectedSrc && window.JitsiMeetExternalAPI) {
           resolve()
           return
         }
 
-        const existingScript = document.getElementById('jitsi-meet-script')
+        // Remove old script tag and clean global object if domain changed or was cached
         if (existingScript) {
-          existingScript.addEventListener('load', () => resolve())
-          existingScript.addEventListener('error', () =>
-            reject(new Error('Failed to load video service'))
-          )
-          return
+          existingScript.remove()
         }
+        delete (window as any).JitsiMeetExternalAPI
 
         const script = document.createElement('script')
         script.id = 'jitsi-meet-script'
-        script.src = 'https://meet.jit.si/external_api.js'
+        script.src = expectedSrc
         script.async = true
         script.onload = () => resolve()
         script.onerror = () =>
@@ -168,7 +170,6 @@ export default function VideoConsultationModal({
             apiRef.current = null
           }
 
-          const domain = 'meet.jit.si'
           const options = {
             roomName: roomName,
             width: '100%',
@@ -183,6 +184,7 @@ export default function VideoConsultationModal({
               startWithVideoMuted: false,
               prejoinPageEnabled: false,
               prejoinConfig: { enabled: false },
+              enableLobby: false,
               disableDeepLinking: true,
               enableWelcomePage: false,
               enableClosePage: false, // Prevents 8x8 promotional close page
