@@ -87,6 +87,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     rehydrate()
+
+    const handleSync = () => {
+      try {
+        const storedUser = localStorage.getItem('medbook_user')
+        const storedToken = localStorage.getItem('medbook_token')
+        const storedSetup = localStorage.getItem('medbook_doctor_setup_completed')
+        if (storedUser) {
+          setUser(JSON.parse(storedUser))
+        }
+        if (storedToken) {
+          setToken(storedToken)
+        }
+        if (storedSetup !== null) {
+          setIsDoctorSetupCompleted(storedSetup === 'true')
+        }
+      } catch {}
+    }
+
+    window.addEventListener('medbook:sync', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    let channel: BroadcastChannel | null = null
+    try {
+      channel = new BroadcastChannel('medbook_sync_channel')
+      channel.onmessage = (event) => {
+        if (
+          event.data?.type === 'SYNC_APPOINTMENTS' ||
+          event.data?.type === 'SYNC_PROFILE' ||
+          event.data?.type === 'APPOINTMENTS_UPDATED'
+        ) {
+          handleSync()
+        }
+      }
+    } catch {}
+
+    return () => {
+      window.removeEventListener('medbook:sync', handleSync)
+      window.removeEventListener('storage', handleSync)
+      if (channel) {
+        try {
+          channel.close()
+        } catch {}
+      }
+    }
   }, [])
 
   const login = async (data: LoginData) => {
@@ -147,6 +191,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {}
       return updated
     })
+
+    try {
+      const channel = new BroadcastChannel('medbook_sync_channel')
+      channel.postMessage({ type: 'SYNC_PROFILE', timestamp: Date.now() })
+      channel.close()
+    } catch {}
 
     try {
       window.dispatchEvent(new CustomEvent('medbook:sync'))
