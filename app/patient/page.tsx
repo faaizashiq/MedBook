@@ -41,7 +41,8 @@ import {
   ApiAppointment,
 } from '@/lib/api/appointments'
 import { getDoctorDetail } from '@/lib/api/doctors'
-import { updatePatientProfile } from '@/lib/api/patient'
+import { updatePatientProfile, getPatientProfile } from '@/lib/api/patient'
+import { getAppointmentTimeWindow } from '@/lib/utils/appointmentTime'
 import { Avatar } from '@/components/ui/Avatar'
 import VideoConsultationModal from '@/components/consultation/VideoConsultationModal'
 import { AvatarPicker } from '@/components/ui/AvatarPicker'
@@ -322,15 +323,40 @@ function AppointmentCard({
             Cancel
           </button>
 
-          {(appointment.type === 'Video Consultation' || appointment.type?.toLowerCase().includes('video')) && appointment.status === 'CONFIRMED' && (
-            <button
-              onClick={() => onJoinVideoCall?.(appointment)}
-              className="ml-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 active:bg-blue-800 transition-all shadow-btn"
-            >
-              <Video className="h-3.5 w-3.5" />
-              <span>Join Video Call</span>
-            </button>
-          )}
+          {(appointment.type === 'Video Consultation' || appointment.type?.toLowerCase().includes('video')) && appointment.status === 'CONFIRMED' && (() => {
+            const timeWindow = getAppointmentTimeWindow(appointment.date, appointment.time, 30, 10)
+            if (timeWindow.canJoin) {
+              return (
+                <button
+                  type="button"
+                  onClick={() => onJoinVideoCall?.(appointment)}
+                  className="ml-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-all shadow-btn animate-pulse"
+                  title="Consultation room is open! Click to join."
+                >
+                  <Video className="h-3.5 w-3.5" />
+                  <span>Join Video Call (Live)</span>
+                </button>
+              )
+            } else if (timeWindow.isUpcoming) {
+              return (
+                <button
+                  type="button"
+                  disabled
+                  className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-400 border border-slate-200 text-xs font-semibold cursor-not-allowed"
+                  title={`Room opens 10 minutes before start time (${timeWindow.formattedOpensAt}).`}
+                >
+                  <Video className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Opens at {timeWindow.formattedOpensAt}</span>
+                </button>
+              )
+            } else {
+              return (
+                <span className="ml-auto text-xs text-slate-400 font-medium">
+                  Session Concluded
+                </span>
+              )
+            }
+          })()}
         </div>
       )}
 
@@ -687,6 +713,11 @@ function EditProfileModal({
   const [avatar, setAvatar] = useState(currentAvatar || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    setName(currentName)
+    setAvatar(currentAvatar || '')
+  }, [currentName, currentAvatar])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1046,12 +1077,31 @@ export default function PatientDashboard() {
     }
   }, [authLoading, user, router])
 
-  // Initialize display name from auth user
+  // Initialize and keep live profile synced from database
   useEffect(() => {
     if (user?.fullName) {
       setDisplayName(user.fullName)
     }
-  }, [user])
+
+    async function loadLiveProfile() {
+      try {
+        const res = await getPatientProfile()
+        if (res?.profile?.full_name) {
+          setDisplayName(res.profile.full_name)
+          updateUser({
+            fullName: res.profile.full_name,
+            avatarUrl: res.profile.avatar_url,
+          })
+        }
+      } catch (err) {
+        console.warn('Failed to load patient live profile:', err)
+      }
+    }
+
+    if (user && user.role === 'PATIENT') {
+      loadLiveProfile()
+    }
+  }, [user?.id])
 
   // Close profile dropdown on outside click
   useEffect(() => {
@@ -1452,10 +1502,12 @@ export default function PatientDashboard() {
           isOpen={activeVideoCall !== null}
           onClose={() => setActiveVideoCall(null)}
           appointmentId={activeVideoCall.id}
-          patientName={user?.fullName || 'Patient'}
+          patientName={displayName || user?.fullName || 'Patient'}
           doctorName={activeVideoCall.doctor}
           userRole="PATIENT"
           userEmail={user?.email || ''}
+          appointmentDate={activeVideoCall.date}
+          appointmentTime={activeVideoCall.time}
           onCallEnd={() => {
             if (activeVideoCall.completed && !activeVideoCall.reviewed) {
               setReviewAppointment(activeVideoCall)

@@ -39,6 +39,7 @@ import {
 import { Avatar } from '@/components/ui/Avatar'
 import { AvatarPicker } from '@/components/ui/AvatarPicker'
 import { apiFetch } from '@/lib/api/client'
+import { getAppointmentTimeWindow } from '@/lib/utils/appointmentTime'
 import VideoConsultationModal from '@/components/consultation/VideoConsultationModal'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -235,16 +236,40 @@ function AppointmentCard({
                 Confirmed
               </span>
 
-              {(appointment.type === 'Video Consultation' || appointment.type?.toLowerCase().includes('video')) && (
-                <button
-                  type="button"
-                  onClick={onJoinVideoCall}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-btn transition-all"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                  <span>Join Video Call</span>
-                </button>
-              )}
+              {(appointment.type === 'Video Consultation' || appointment.type?.toLowerCase().includes('video')) && (() => {
+                const timeWindow = getAppointmentTimeWindow(appointment.date, appointment.time, 30, 10)
+                if (timeWindow.canJoin) {
+                  return (
+                    <button
+                      type="button"
+                      onClick={onJoinVideoCall}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-btn transition-all animate-pulse"
+                      title="Consultation room is open! Click to join."
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                      <span>Join Video Call (Live)</span>
+                    </button>
+                  )
+                } else if (timeWindow.isUpcoming) {
+                  return (
+                    <button
+                      type="button"
+                      disabled
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-400 border border-slate-200 text-xs font-semibold rounded-xl cursor-not-allowed"
+                      title={`Room opens 10 minutes before start time (${timeWindow.formattedOpensAt}).`}
+                    >
+                      <Video className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Opens at {timeWindow.formattedOpensAt}</span>
+                    </button>
+                  )
+                } else {
+                  return (
+                    <span className="text-xs text-slate-400 font-medium">
+                      Session Concluded
+                    </span>
+                  )
+                }
+              })()}
 
               <button
                 type="button"
@@ -930,6 +955,8 @@ export default function DoctorDashboard() {
           doctorName={user?.fullName || 'Doctor'}
           userRole="DOCTOR"
           userEmail={user?.email || ''}
+          appointmentDate={activeVideoCall.date}
+          appointmentTime={activeVideoCall.time}
           onCallEnd={() => {
             // Video consultation ended
           }}

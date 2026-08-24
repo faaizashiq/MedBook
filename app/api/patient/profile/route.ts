@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/database/supabase'
+import { supabaseAdmin as supabase } from '@/lib/database/supabase'
 import { verifyJWT, signJWT } from '@/lib/auth/jwt'
 
 function getAuthenticatedUser(req: NextRequest) {

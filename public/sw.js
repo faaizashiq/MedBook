@@ -1,5 +1,5 @@
-// MedBook Service Worker v3.0.0
-const CACHE_NAME = 'medbook-pwa-v3'
+// MedBook Service Worker v3.1.0
+const CACHE_NAME = 'medbook-pwa-v3.1'
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',

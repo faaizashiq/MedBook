@@ -110,11 +110,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (newToken) {
       setToken(newToken)
       localStorage.setItem('medbook_token', newToken)
+      document.cookie = `medbook_token=${newToken}; path=/; max-age=604800; SameSite=Lax`
     }
     setUser((prev) => {
       if (!prev) return null
       const updated = { ...prev, ...partial }
       localStorage.setItem('medbook_user', JSON.stringify(updated))
+      try {
+        const storedAuth = localStorage.getItem('medbook_auth')
+        if (storedAuth) {
+          const parsed = JSON.parse(storedAuth)
+          if (partial.fullName) parsed.name = partial.fullName
+          localStorage.setItem('medbook_auth', JSON.stringify(parsed))
+        }
+      } catch {}
       return updated
     })
 
