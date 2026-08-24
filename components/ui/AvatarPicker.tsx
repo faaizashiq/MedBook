@@ -1,16 +1,19 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Sparkles,
   Upload,
   User,
   Check,
-  Image as ImageIcon,
   RotateCcw,
+  RotateCw,
   AlertCircle,
-  Stethoscope,
-  Heart,
+  ZoomIn,
+  ZoomOut,
+  Crop,
+  X,
+  Camera,
 } from 'lucide-react'
 import {
   AvatarPreset,
@@ -27,47 +30,228 @@ interface AvatarPickerProps {
   allowDeviceUpload?: boolean
 }
 
-// Client-side image compression for device uploads
-async function compressImageFile(file: File, maxSize = 240, quality = 0.85): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('Failed to read file from device.'))
-    reader.onload = (e) => {
-      const img = new Image()
-      img.onerror = () => reject(new Error('Invalid image file format.'))
-      img.onload = () => {
-        const canvas = document.createElement('canvas')
-        let width = img.width
-        let height = img.height
-
-        // Calculate aspect ratio fit into maxSize x maxSize square
-        if (width > height) {
-          if (width > maxSize) {
-            height = Math.round((height * maxSize) / width)
-            width = maxSize
-          }
-        } else {
-          if (height > maxSize) {
-            width = Math.round((width * maxSize) / height)
-            height = maxSize
-          }
-        }
-
-        canvas.width = width
-        canvas.height = height
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return reject(new Error('Canvas context unavailable'))
-
-        ctx.drawImage(img, 0, 0, width, height)
-        const compressedBase64 = canvas.toDataURL('image/jpeg', quality)
-        resolve(compressedBase64)
-      }
-      img.src = e.target?.result as string
-    }
-    reader.readAsDataURL(file)
-  })
+// ─────────────────────────────────────────────────────────────────────────────
+// Interactive Avatar Crop Modal
+// ─────────────────────────────────────────────────────────────────────────────
+interface ImageCropModalProps {
+  imageSrc: string
+  isOpen: boolean
+  onClose: () => void
+  onCropComplete: (croppedDataUrl: string) => void
 }
 
+function ImageCropModal({ imageSrc, isOpen, onClose, onCropComplete }: ImageCropModalProps) {
+  const [zoom, setZoom] = useState(1)
+  const [rotation, setRotation] = useState(0)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
+  const imageRef = useRef<HTMLImageElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Reset controls when a new image is loaded
+  useEffect(() => {
+    if (isOpen) {
+      setZoom(1)
+      setRotation(0)
+      setPosition({ x: 0, y: 0 })
+    }
+  }, [isOpen, imageSrc])
+
+  // Mouse & Touch Drag Handlers
+  const handlePointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true)
+    setDragStart({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    })
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return
+    setPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y,
+    })
+  }
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false)
+    try {
+      ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+    } catch {}
+  }
+
+  const handleRotate = () => {
+    setRotation((prev) => (prev + 90) % 360)
+  }
+
+  // Export cropped circle using HTML5 Canvas
+  const handleApplyCrop = () => {
+    const img = imageRef.current
+    if (!img) return
+
+    const outputSize = 400
+    const canvas = document.createElement('canvas')
+    canvas.width = outputSize
+    canvas.height = outputSize
+    const ctx = canvas.getContext('2d')
+
+    if (!ctx) return
+
+    // Smooth quality
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+
+    // Create circular clip path
+    ctx.beginPath()
+    ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2)
+    ctx.closePath()
+    ctx.clip()
+
+    // Move origin to center of canvas
+    ctx.translate(outputSize / 2, outputSize / 2)
+    ctx.rotate((rotation * Math.PI) / 180)
+    ctx.scale(zoom, zoom)
+
+    // Calculate crop offset scale ratio
+    const viewportSize = 240 // The preview diameter in DOM
+    const scaleRatio = outputSize / viewportSize
+
+    const drawX = position.x * scaleRatio
+    const drawY = position.y * scaleRatio
+
+    // Draw scaled image centered
+    const imgWidth = (img.naturalWidth / img.naturalHeight >= 1 ? viewportSize * (img.naturalWidth / img.naturalHeight) : viewportSize) * scaleRatio
+    const imgHeight = (img.naturalHeight / img.naturalWidth >= 1 ? viewportSize * (img.naturalHeight / img.naturalWidth) : viewportSize) * scaleRatio
+
+    ctx.drawImage(img, -imgWidth / 2 + drawX, -imgHeight / 2 + drawY, imgWidth, imgHeight)
+
+    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    onCropComplete(croppedDataUrl)
+    onClose()
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-in fade-in">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Crop className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Crop & Adjust Avatar</h3>
+              <p className="text-[11px] text-slate-500">Drag to reposition, slider to zoom</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Cropping Canvas Viewport */}
+        <div className="relative p-6 bg-slate-900 flex items-center justify-center overflow-hidden select-none">
+          {/* Circular Crop Frame (240x240) */}
+          <div
+            ref={containerRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className="relative w-60 h-60 rounded-full border-4 border-white/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.75)] overflow-hidden cursor-grab active:cursor-grabbing touch-none z-10"
+          >
+            <img
+              ref={imageRef}
+              src={imageSrc}
+              alt="Crop target"
+              draggable={false}
+              style={{
+                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom}) rotate(${rotation}deg)`,
+                transformOrigin: 'center center',
+                transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+              }}
+              className="w-full h-full object-cover pointer-events-none"
+            />
+          </div>
+
+          {/* Grid lines overlay for alignment */}
+          <div className="absolute w-60 h-60 rounded-full pointer-events-none z-20 border border-white/20">
+            <div className="absolute inset-x-0 top-1/3 border-b border-white/20" />
+            <div className="absolute inset-x-0 top-2/3 border-b border-white/20" />
+            <div className="absolute inset-y-0 left-1/3 border-r border-white/20" />
+            <div className="absolute inset-y-0 left-2/3 border-r border-white/20" />
+          </div>
+        </div>
+
+        {/* Controls Toolbar */}
+        <div className="p-5 space-y-4 bg-white">
+          {/* Zoom Slider */}
+          <div className="flex items-center gap-3">
+            <ZoomOut className="h-4 w-4 text-slate-400 flex-shrink-0" />
+            <input
+              type="range"
+              min="1"
+              max="3"
+              step="0.05"
+              value={zoom}
+              onChange={(e) => setZoom(parseFloat(e.target.value))}
+              className="flex-1 accent-blue-600 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
+            />
+            <ZoomIn className="h-4 w-4 text-slate-400 flex-shrink-0" />
+            <span className="text-xs font-mono font-bold text-slate-600 w-9 text-right">
+              {zoom.toFixed(1)}x
+            </span>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between pt-1 gap-2">
+            <button
+              type="button"
+              onClick={handleRotate}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              <span>Rotate 90°</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-slate-600 text-xs font-bold hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApplyCrop}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold transition-all shadow-sm"
+              >
+                <Check className="h-3.5 w-3.5 stroke-[3]" />
+                <span>Save Avatar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main AvatarPicker Component
+// ─────────────────────────────────────────────────────────────────────────────
 export function AvatarPicker({
   currentAvatar,
   name,
@@ -79,7 +263,8 @@ export function AvatarPicker({
   const [genderFilter, setGenderFilter] = useState<'all' | 'female' | 'male'>('all')
   const [activeTab, setActiveTab] = useState<'presets' | 'device'>('presets')
   const [uploadError, setUploadError] = useState('')
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [cropModalOpen, setCropModalOpen] = useState(false)
+  const [rawImageSrc, setRawImageSrc] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const presets = role === 'DOCTOR' ? DOCTOR_AVATARS : PATIENT_AVATARS
@@ -94,7 +279,7 @@ export function AvatarPicker({
     setUploadError('')
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -103,23 +288,26 @@ export function AvatarPicker({
       return
     }
 
-    // Limit original file size to 10MB
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('Image is too large. Please select an image under 10MB.')
+    if (file.size > 15 * 1024 * 1024) {
+      setUploadError('Image is too large. Please select an image under 15MB.')
       return
     }
 
-    try {
-      setIsProcessing(true)
-      setUploadError('')
-      const compressedDataUri = await compressImageFile(file)
-      setSelectedUrl(compressedDataUri)
-      onSelect(compressedDataUri)
-    } catch (err: any) {
-      setUploadError(err?.message || 'Error processing uploaded image.')
-    } finally {
-      setIsProcessing(false)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setRawImageSrc(event.target.result as string)
+        setCropModalOpen(true)
+        setUploadError('')
+      }
     }
+    reader.readAsDataURL(file)
+  }
+
+  const handleCroppedImage = (croppedDataUrl: string) => {
+    setSelectedUrl(croppedDataUrl)
+    onSelect(croppedDataUrl)
+    setUploadError('')
   }
 
   const handleRemoveAvatar = () => {
@@ -130,6 +318,17 @@ export function AvatarPicker({
 
   return (
     <div className="space-y-4">
+      {/* Interactive Crop Modal */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        imageSrc={rawImageSrc}
+        onClose={() => {
+          setCropModalOpen(false)
+          if (fileInputRef.current) fileInputRef.current.value = ''
+        }}
+        onCropComplete={handleCroppedImage}
+      />
+
       {/* Current Preview Banner */}
       <div className="flex items-center gap-4 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
         <Avatar src={selectedUrl} name={name} size="xl" className="shadow-sm ring-2 ring-white" />
@@ -181,7 +380,7 @@ export function AvatarPicker({
               }`}
             >
               <Upload className="h-3.5 w-3.5" />
-              Upload from Device
+              Upload & Crop Image
             </button>
           )}
         </div>
@@ -252,7 +451,7 @@ export function AvatarPicker({
             ref={fileInputRef}
             type="file"
             accept="image/png, image/jpeg, image/webp, image/gif"
-            onChange={handleFileUpload}
+            onChange={handleFileChange}
             className="hidden"
             id="device-avatar-input"
           />
@@ -262,14 +461,14 @@ export function AvatarPicker({
             className="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50/60 hover:bg-blue-50/30 transition-all rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer text-center group"
           >
             <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-500 group-hover:text-blue-600 group-hover:scale-105 transition-all mb-2">
-              <Upload className="h-6 w-6" />
+              <Camera className="h-6 w-6" />
             </div>
 
             <p className="text-xs font-bold text-slate-800">
-              {isProcessing ? 'Processing image...' : 'Choose image from your computer or phone'}
+              Select Photo to Crop & Position
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
-              Supports PNG, JPG, or WebP. Automatically optimized & compressed for fast loading.
+              Supports mobile camera & file upload. Zoom, drag, and rotate your circular avatar.
             </p>
           </label>
 
