@@ -27,6 +27,7 @@ export interface SignupData {
 export interface LoginData {
   email: string
   password: string
+  expected_role?: 'PATIENT' | 'DOCTOR'
 }
 
 export async function signupUser(data: SignupData): Promise<AuthResponse> {

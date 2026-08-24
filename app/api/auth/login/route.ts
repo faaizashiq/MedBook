@@ -6,7 +6,7 @@ import { signJWT } from '@/lib/auth/jwt'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { email, password } = body
+    const { email, password, expected_role } = body
 
     if (!email || !password) {
       return NextResponse.json(
@@ -31,6 +31,27 @@ export async function POST(req: NextRequest) {
         { error: 'Invalid email or password.' },
         { status: 401 }
       )
+    }
+
+    // 3. Enforce Portal Role Matching (e.g. Doctor cannot login through Patient Portal tab)
+    if (expected_role && user.role !== expected_role) {
+      if (user.role === 'DOCTOR') {
+        return NextResponse.json(
+          {
+            error:
+              'This account is registered as a Doctor. Please switch to the "Doctor Portal" tab above to sign in.',
+          },
+          { status: 403 }
+        )
+      } else {
+        return NextResponse.json(
+          {
+            error:
+              'This account is registered as a Patient. Please switch to the "Patient Portal" tab above to sign in.',
+          },
+          { status: 403 }
+        )
+      }
     }
 
     // 3. Check Doctor Profile Setup Status

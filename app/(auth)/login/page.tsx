@@ -337,7 +337,11 @@ function LoginFormContent() {
     setLoading(true)
 
     try {
-      const response = await login({ email: cleanEmail, password })
+      const response = await login({
+        email: cleanEmail,
+        password,
+        expected_role: role.toUpperCase() as 'PATIENT' | 'DOCTOR',
+      })
 
       const destUrl =
         redirectParam ||

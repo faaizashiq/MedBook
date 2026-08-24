@@ -1,17 +1,22 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Video,
-  X,
-  Loader2,
+  VideoOff,
+  Mic,
+  MicOff,
+  PhoneOff,
+  ScreenShare,
   ShieldCheck,
   Maximize2,
   Minimize2,
   Clock,
   AlertTriangle,
-  CheckCircle2,
-  PhoneOff,
+  Loader2,
+  Users,
+  RefreshCw,
+  Camera,
 } from 'lucide-react'
 import { getAppointmentTimeWindow } from '@/lib/utils/appointmentTime'
 
@@ -28,12 +33,6 @@ interface VideoConsultationModalProps {
   onCallEnd?: () => void
 }
 
-declare global {
-  interface Window {
-    JitsiMeetExternalAPI?: any
-  }
-}
-
 export default function VideoConsultationModal({
   isOpen,
   onClose,
@@ -46,10 +45,25 @@ export default function VideoConsultationModal({
   appointmentTime,
   onCallEnd,
 }: VideoConsultationModalProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const apiRef = useRef<any>(null)
-  const [loading, setLoading] = useState(true)
+  const localVideoRef = useRef<HTMLVideoElement>(null)
+  const remoteVideoRef = useRef<HTMLVideoElement>(null)
+  const peerRef = useRef<any>(null)
+  const activeCallRef = useRef<any>(null)
+  const localStreamRef = useRef<MediaStream | null>(null)
+  const screenStreamRef = useRef<MediaStream | null>(null)
+  const retryIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null)
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
+  const [isPeerConnected, setIsPeerConnected] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [permissionPrompt, setPermissionPrompt] = useState(false)
+
+  // Media Controls
+  const [isAudioMuted, setIsAudioMuted] = useState(false)
+  const [isVideoMuted, setIsVideoMuted] = useState(false)
+  const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [hasEnded, setHasEnded] = useState(false)
 
@@ -57,19 +71,19 @@ export default function VideoConsultationModal({
   const [secondsRemaining, setSecondsRemaining] = useState<number>(30 * 60)
   const [showFiveMinWarning, setShowFiveMinWarning] = useState(false)
 
-  // Generate safe deterministic room name
-  const roomName = `medbook-consultation-${appointmentId}`
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]/g, '')
+  // Clean room identifier
+  const safeApptId = String(appointmentId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 24)
+  const myPeerId = userRole === 'DOCTOR' ? `mb-doc-${safeApptId}` : `mb-pat-${safeApptId}`
+  const targetPeerId = userRole === 'DOCTOR' ? `mb-pat-${safeApptId}` : `mb-doc-${safeApptId}`
 
-  const displayName =
+  const otherPersonTitle =
     userRole === 'DOCTOR'
-      ? doctorName.startsWith('Dr.')
-        ? doctorName
-        : `Dr. ${doctorName}`
-      : patientName
+      ? patientName || 'Patient'
+      : doctorName.startsWith('Dr.')
+      ? doctorName
+      : `Dr. ${doctorName || 'Specialist'}`
 
-  // Timer effect for 30-minute session and 5-min warning
+  // ─── 30-Minute Timer ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return
 
@@ -92,214 +106,324 @@ export default function VideoConsultationModal({
 
     updateTimer()
     const timerInterval = setInterval(updateTimer, 1000)
-
     return () => clearInterval(timerInterval)
   }, [isOpen, appointmentDate, appointmentTime])
 
-  // Handle immediate clean exit without showing Jitsi promo / 8x8 post-call page
+  // ─── Bind stream to Video element safely (iOS/Android compatible) ────────────
+  const attachStreamToVideo = useCallback((videoEl: HTMLVideoElement | null, stream: MediaStream | null, isMuted = false) => {
+    if (!videoEl || !stream) return
+    try {
+      videoEl.srcObject = stream
+      videoEl.muted = isMuted
+      videoEl.defaultMuted = isMuted
+      videoEl.setAttribute('playsinline', 'true')
+      videoEl.setAttribute('webkit-playsinline', 'true')
+      const playPromise = videoEl.play()
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Auto-play was prevented; ignore or wait for user interaction
+        })
+      }
+    } catch (e) {
+      console.warn('Video attach notice:', e)
+    }
+  }, [])
+
+  // ─── Acquire Camera and Microphone with Mobile Fallbacks ────────────────────
+  const startCamera = async (): Promise<MediaStream | null> => {
+    try {
+      // 1. Try standard front-camera constraints
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: true,
+      })
+    } catch (err1: any) {
+      console.warn('Front camera standard failed, trying generic constraints:', err1)
+      try {
+        // 2. Fallback: Generic video + audio
+        return await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        })
+      } catch (err2: any) {
+        console.warn('Video + Audio failed, trying video only:', err2)
+        try {
+          // 3. Fallback: Video only
+          return await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          })
+        } catch (finalErr: any) {
+          console.error('All camera attempts failed:', finalErr)
+          throw finalErr
+        }
+      }
+    }
+  }
+
+  // ─── Initialize WebRTC Peer Connection ──────────────────────────────────────
+  const initializeCall = async () => {
+    setIsConnecting(true)
+    setError(null)
+    setPermissionPrompt(false)
+    setHasEnded(false)
+
+    try {
+      // Step 1: Open Camera
+      const stream = await startCamera()
+      if (!stream) return
+
+      localStreamRef.current = stream
+      setLocalStream(stream)
+      setIsConnecting(false)
+
+      if (localVideoRef.current) {
+        attachStreamToVideo(localVideoRef.current, stream, true)
+      }
+
+      // Step 2: Initialize PeerJS
+      const { default: Peer } = await import('peerjs')
+
+      // Clean up previous peer if existing
+      if (peerRef.current) {
+        try {
+          peerRef.current.destroy()
+        } catch {}
+      }
+
+      const peer = new Peer(myPeerId, {
+        debug: 1,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' },
+          ],
+        },
+      })
+
+      peerRef.current = peer
+
+      // Handle Peer server open
+      peer.on('open', () => {
+        // Attempt initial call
+        callTargetPeer(peer, stream)
+
+        // Polling loop to auto-connect as soon as the other person enters
+        if (retryIntervalRef.current) clearInterval(retryIntervalRef.current)
+        retryIntervalRef.current = setInterval(() => {
+          if (!isPeerConnected && peer && !peer.destroyed) {
+            callTargetPeer(peer, stream)
+          }
+        }, 2500)
+      })
+
+      // Handle Incoming Call
+      peer.on('call', (incomingCall: any) => {
+        activeCallRef.current = incomingCall
+        incomingCall.answer(stream)
+
+        incomingCall.on('stream', (remoteMediaStream: MediaStream) => {
+          setRemoteStream(remoteMediaStream)
+          setIsPeerConnected(true)
+          if (remoteVideoRef.current) {
+            attachStreamToVideo(remoteVideoRef.current, remoteMediaStream, false)
+          }
+        })
+
+        incomingCall.on('close', () => {
+          setRemoteStream(null)
+          setIsPeerConnected(false)
+        })
+
+        incomingCall.on('error', () => {
+          setRemoteStream(null)
+          setIsPeerConnected(false)
+        })
+      })
+
+      peer.on('error', (err: any) => {
+        if (err.type === 'unavailable-id') {
+          // ID in use; attempt to connect as caller
+          callTargetPeer(peer, stream)
+        }
+      })
+    } catch (err: any) {
+      console.error('Call initialization error:', err)
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setPermissionPrompt(true)
+        setError('Camera & Microphone access is required. Please tap "Enable Camera" below and allow permissions.')
+      } else {
+        setError('Could not access camera/microphone on this device. Please check permissions.')
+      }
+      setIsConnecting(false)
+    }
+  }
+
+  const callTargetPeer = (peer: any, stream: MediaStream) => {
+    if (!peer || peer.destroyed || isPeerConnected) return
+
+    try {
+      const call = peer.call(targetPeerId, stream)
+      if (call) {
+        activeCallRef.current = call
+        call.on('stream', (remoteMediaStream: MediaStream) => {
+          setRemoteStream(remoteMediaStream)
+          setIsPeerConnected(true)
+          if (remoteVideoRef.current) {
+            attachStreamToVideo(remoteVideoRef.current, remoteMediaStream, false)
+          }
+        })
+
+        call.on('close', () => {
+          setRemoteStream(null)
+          setIsPeerConnected(false)
+        })
+
+        call.on('error', () => {
+          // Target not ready yet
+        })
+      }
+    } catch {
+      // Target peer offline
+    }
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      initializeCall()
+    }
+
+    return () => {
+      if (retryIntervalRef.current) clearInterval(retryIntervalRef.current)
+      cleanupMedia()
+    }
+  }, [isOpen])
+
+  // Sync video streams to elements on state changes
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      attachStreamToVideo(localVideoRef.current, localStream, true)
+    }
+  }, [localStream, attachStreamToVideo])
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      attachStreamToVideo(remoteVideoRef.current, remoteStream, false)
+    }
+  }, [remoteStream, attachStreamToVideo])
+
+  // ─── Clean Media Streams & Exit Call ────────────────────────────────────────
+  const cleanupMedia = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop())
+      localStreamRef.current = null
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => track.stop())
+      screenStreamRef.current = null
+    }
+    if (activeCallRef.current) {
+      try {
+        activeCallRef.current.close()
+      } catch {}
+      activeCallRef.current = null
+    }
+    if (peerRef.current) {
+      try {
+        peerRef.current.destroy()
+      } catch {}
+      peerRef.current = null
+    }
+  }
+
   const handleExitCall = () => {
     if (hasEnded) return
     setHasEnded(true)
-
-    if (apiRef.current) {
-      try {
-        apiRef.current.executeCommand('hangup')
-        apiRef.current.dispose()
-      } catch (e) {
-        // ignore
-      }
-      apiRef.current = null
-    }
-
-    if (containerRef.current) {
-      containerRef.current.innerHTML = ''
-    }
-
+    cleanupMedia()
     if (onCallEnd) onCallEnd()
     onClose()
   }
 
-  useEffect(() => {
-    if (!isOpen) return
+  // ─── Toggle Audio ────────────────────────────────────────────────────────────
+  const toggleAudio = () => {
+    if (localStreamRef.current) {
+      const audioTracks = localStreamRef.current.getAudioTracks()
+      const nextState = !isAudioMuted
+      audioTracks.forEach((track) => {
+        track.enabled = !nextState
+      })
+      setIsAudioMuted(nextState)
+    }
+  }
 
-    let isMounted = true
-    setLoading(true)
-    setError(null)
-    setHasEnded(false)
+  // ─── Toggle Video ────────────────────────────────────────────────────────────
+  const toggleVideo = () => {
+    if (localStreamRef.current) {
+      const videoTracks = localStreamRef.current.getVideoTracks()
+      const nextState = !isVideoMuted
+      videoTracks.forEach((track) => {
+        track.enabled = !nextState
+      })
+      setIsVideoMuted(nextState)
+    }
+  }
 
-    const domain = process.env.NEXT_PUBLIC_JITSI_DOMAIN || 'jitsi.riot.im'
-
-    // Load Jitsi Meet External API script dynamically & clean stale scripts
-    const loadJitsiScript = (): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        const expectedSrc = `https://${domain}/external_api.js`
-        const existingScript = document.getElementById('jitsi-meet-script') as HTMLScriptElement | null
-
-        if (existingScript && existingScript.src === expectedSrc && window.JitsiMeetExternalAPI) {
-          resolve()
+  // ─── Toggle Screen Share ─────────────────────────────────────────────────────
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((t) => t.stop())
+        screenStreamRef.current = null
+      }
+      try {
+        const camStream = await startCamera()
+        if (camStream) {
+          const camTrack = camStream.getVideoTracks()[0]
+          if (localStreamRef.current) {
+            const oldTrack = localStreamRef.current.getVideoTracks()[0]
+            if (oldTrack) {
+              localStreamRef.current.removeTrack(oldTrack)
+              oldTrack.stop()
+            }
+            localStreamRef.current.addTrack(camTrack)
+          }
+        }
+        setIsScreenSharing(false)
+      } catch {}
+    } else {
+      try {
+        if (!navigator.mediaDevices.getDisplayMedia) {
+          alert('Screen sharing is not supported on mobile devices.')
           return
         }
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+        screenStreamRef.current = screenStream
+        const screenTrack = screenStream.getVideoTracks()[0]
 
-        // Remove old script tag and clean global object if domain changed or was cached
-        if (existingScript) {
-          existingScript.remove()
-        }
-        delete (window as any).JitsiMeetExternalAPI
-
-        const script = document.createElement('script')
-        script.id = 'jitsi-meet-script'
-        script.src = expectedSrc
-        script.async = true
-        script.onload = () => resolve()
-        script.onerror = () =>
-          reject(new Error('Failed to connect to video consultation server'))
-        document.body.appendChild(script)
-      })
-    }
-
-    loadJitsiScript()
-      .then(() => {
-        if (!isMounted || !containerRef.current) return
-
-        try {
-          // Dispose previous instance if any
-          if (apiRef.current) {
-            try {
-              apiRef.current.dispose()
-            } catch {}
-            apiRef.current = null
+        if (localStreamRef.current) {
+          const oldTrack = localStreamRef.current.getVideoTracks()[0]
+          if (oldTrack) {
+            localStreamRef.current.removeTrack(oldTrack)
+            oldTrack.stop()
           }
-
-          const options = {
-            roomName: roomName,
-            width: '100%',
-            height: '100%',
-            parentNode: containerRef.current,
-            userInfo: {
-              displayName: displayName,
-              email: userEmail || '',
-            },
-            configOverwrite: {
-              startWithAudioMuted: false,
-              startWithVideoMuted: false,
-              prejoinPageEnabled: false,
-              prejoinConfig: { enabled: false },
-              enableLobby: false,
-              disableDeepLinking: true,
-              enableWelcomePage: false,
-              enableClosePage: false, // Prevents 8x8 promotional close page
-              hideConferenceSubject: true,
-              hideConferenceTimer: true, // We provide MedBook's precision countdown
-              hideRecordingLabel: true,
-              disableThirdPartyRequests: true,
-              defaultRemoteDisplayName: 'Consultation Participant',
-              disableInviteFunctions: true,
-              doNotStoreRoom: true,
-              toolbarButtons: [
-                'microphone',
-                'camera',
-                'closedcaptions',
-                'desktop',
-                'fullscreen',
-                'fodeviceselection',
-                'hangup',
-                'chat',
-                'raisehand',
-                'videoquality',
-                'tileview',
-                'settings',
-              ],
-            },
-            interfaceConfigOverwrite: {
-              SHOW_JITSI_WATERMARK: false,
-              SHOW_WATERMARK_FOR_GUESTS: false,
-              SHOW_BRAND_WATERMARK: false,
-              BRAND_WATERMARK_LINK: '',
-              SHOW_POWERED_BY: false,
-              SHOW_PROMOTIONAL_CLOSE_PAGE: false,
-              GENERATE_ROOMNAMES_ON_WELCOME_PAGE: false,
-              DISPLAY_WELCOME_PAGE_CONTENT: false,
-              DISPLAY_WELCOME_PAGE_TOOLBAR_ADDITIONAL_CONTENT: false,
-              DEFAULT_BACKGROUND: '#0f172a',
-              MOBILE_APP_PROMO: false,
-              HIDE_DEEP_LINKING_LOGO: true,
-              DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-              ENABLE_FEEDBACK_ANIMATION: false,
-              APP_NAME: 'MedBook Telehealth',
-              NATIVE_APP_NAME: 'MedBook',
-              PROVIDER_NAME: 'MedBook',
-            },
-          }
-
-          const api = new window.JitsiMeetExternalAPI(domain, options)
-          apiRef.current = api
-
-          const clearLoadingState = () => {
-            if (isMounted) setLoading(false)
-          }
-
-          // Listen for join & stream events to instantly clear loading
-          api.addEventListener('videoConferenceJoined', clearLoadingState)
-          api.addEventListener('participantJoined', clearLoadingState)
-          api.addEventListener('audioMuteStatusChanged', clearLoadingState)
-          api.addEventListener('videoMuteStatusChanged', clearLoadingState)
-
-          // Short safety timer to clear loading overlay and allow user interaction
-          const safetyTimer = setTimeout(clearLoadingState, 1200)
-
-          // LISTEN FOR HANGUP & CLOSE EVENTS TO PREVENT PROMOTIONAL REDIRECTS
-          api.addEventListener('videoConferenceLeft', () => {
-            clearTimeout(safetyTimer)
-            handleExitCall()
-          })
-
-          api.addEventListener('readyToClose', () => {
-            clearTimeout(safetyTimer)
-            handleExitCall()
-          })
-
-          api.addEventListener('toolbarButtonClicked', (e: any) => {
-            if (e?.key === 'hangup') {
-              clearTimeout(safetyTimer)
-              handleExitCall()
-            }
-          })
-        } catch (err: any) {
-          console.error('Jitsi init error:', err)
-          if (isMounted) {
-            setError(
-              'Could not initialize video consultation. Please check your camera permissions.'
-            )
-            setLoading(false)
-          }
+          localStreamRef.current.addTrack(screenTrack)
         }
-      })
-      .catch((err) => {
-        console.error('Jitsi script error:', err)
-        if (isMounted) {
-          setError(
-            'Failed to connect to video service. Please check your internet connection.'
-          )
-          setLoading(false)
-        }
-      })
 
-    return () => {
-      isMounted = false
-      if (apiRef.current) {
-        try {
-          apiRef.current.dispose()
-        } catch (e) {
-          // ignore
+        screenTrack.onended = () => {
+          setIsScreenSharing(false)
         }
-        apiRef.current = null
+
+        setIsScreenSharing(true)
+      } catch {
+        // User cancelled screen share prompt
       }
     }
-  }, [isOpen, roomName, displayName, userEmail])
+  }
 
   if (!isOpen) return null
 
-  // Format timer
   const formatTimer = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60)
     const secs = totalSecs % 60
@@ -310,43 +434,41 @@ export default function VideoConsultationModal({
   const isTimeConcluded = secondsRemaining === 0
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-1.5 sm:p-4 animate-in fade-in">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-1.5 sm:p-4 animate-in fade-in">
       <div
         className={`w-full bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col transition-all ${
           isFullscreen
             ? 'fixed inset-0 rounded-none border-none'
-            : 'max-w-5xl h-[90vh] max-h-[880px]'
+            : 'max-w-5xl h-[92vh] max-h-[860px]'
         }`}
       >
-        {/* Top Telehealth Header Bar */}
-        <div className="px-4 py-3 bg-slate-900 border-b border-slate-800/80 flex items-center justify-between gap-3 text-white flex-shrink-0">
-          {/* Left: Info */}
-          <div className="flex items-center gap-3 min-w-0">
+        {/* ─── Top Telehealth Header Bar ──────────────────────────────────────── */}
+        <div className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-slate-900 border-b border-slate-800/80 flex items-center justify-between gap-2 text-white flex-shrink-0">
+          {/* Left: Consultation Identity */}
+          <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
               <Video className="h-4 w-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xs sm:text-sm font-bold text-slate-100 truncate">
-                  {userRole === 'DOCTOR'
-                    ? `Patient: ${patientName}`
-                    : `Consultation with ${doctorName}`}
+                  {userRole === 'DOCTOR' ? `Patient: ${patientName}` : `Consultation with ${doctorName}`}
                 </h3>
                 <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
                   <ShieldCheck className="h-3 w-3" />
                   Encrypted Visit
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 truncate">
-                MedBook HD Telehealth &middot; 30-Minute Session
+              <p className="text-[10px] sm:text-[11px] text-slate-400 truncate">
+                MedBook HD Telehealth &middot; 30-Min Session
               </p>
             </div>
           </div>
 
-          {/* Center/Right: Session Countdown Timer */}
+          {/* Right: Controls & Timer */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border text-[11px] sm:text-xs font-mono font-bold transition-all ${
                 isTimeConcluded
                   ? 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse'
                   : isFiveMinOrLess
@@ -355,44 +477,38 @@ export default function VideoConsultationModal({
               }`}
               title="Remaining consultation time"
             >
-              <Clock className={`h-3.5 w-3.5 ${isFiveMinOrLess ? 'text-amber-400' : 'text-slate-400'}`} />
-              <span>
-                {isTimeConcluded ? 'Session Time Ended' : `${formatTimer(secondsRemaining)} remaining`}
-              </span>
+              <Clock className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${isFiveMinOrLess ? 'text-amber-400' : 'text-slate-400'}`} />
+              <span>{isTimeConcluded ? 'Time Ended' : `${formatTimer(secondsRemaining)}`}</span>
             </div>
 
             <button
               type="button"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors hidden sm:block"
+              className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors hidden sm:block"
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
-              {isFullscreen ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
 
             <button
               type="button"
               onClick={handleExitCall}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold transition-colors shadow-sm"
               title="End consultation and leave room"
             >
               <PhoneOff className="h-3.5 w-3.5" />
-              <span>Leave Call</span>
+              <span className="hidden sm:inline">Leave</span>
             </button>
           </div>
         </div>
 
-        {/* 5-Minute Warning Toast / Banner */}
+        {/* ─── 5-Minute Warning Toast / Banner ────────────────────────────────── */}
         {showFiveMinWarning && (
-          <div className="bg-amber-500/90 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between gap-3 shadow-md animate-in slide-in-from-top-2">
+          <div className="bg-amber-500/90 text-slate-950 px-4 py-1.5 text-xs font-bold flex items-center justify-between gap-3 shadow-md animate-in slide-in-from-top-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               <span>
-                ⚠️ Consultation ending soon — {formatTimer(secondsRemaining)} remaining in this 30-minute session.
+                ⚠️ Consultation ending soon — {formatTimer(secondsRemaining)} remaining in this session.
               </span>
             </div>
             <button
@@ -405,63 +521,176 @@ export default function VideoConsultationModal({
           </div>
         )}
 
-        {/* Time Concluded Warning Banner */}
-        {isTimeConcluded && (
-          <div className="bg-red-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between gap-3 shadow-md animate-in slide-in-from-top-2">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 flex-shrink-0" />
-              <span>
-                ⏰ Scheduled 30-minute consultation time has concluded. Please wrap up and leave the call when ready.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleExitCall}
-              className="px-2.5 py-1 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-slate-100"
-            >
-              Finish Consultation
-            </button>
-          </div>
-        )}
-
-        {/* Video Canvas Container */}
-        <div className="relative flex-1 bg-slate-950 overflow-hidden flex items-center justify-center">
-          {loading && (
-            <div className="absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-center bg-slate-950/75 backdrop-blur-sm text-white gap-3 p-4 transition-opacity duration-300">
+        {/* ─── Main Video Call Stage ──────────────────────────────────────────── */}
+        <div className="relative flex-1 bg-slate-950 overflow-hidden flex items-center justify-center p-2 sm:p-4">
+          {/* Loading Overlay */}
+          {isConnecting && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950 text-white gap-3 p-4">
               <div className="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
               </div>
-              <div className="text-center">
-                <p className="text-sm font-bold text-slate-200">
-                  Connecting to secure medical room...
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Please allow camera and microphone access when prompted
-                </p>
-              </div>
+              <p className="text-sm font-bold text-slate-200">Opening Camera & Microphone...</p>
+              <p className="text-xs text-slate-400">Please allow browser permissions</p>
             </div>
           )}
 
+          {/* Error Message with Re-enable button for Mobile */}
           {error && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950 text-white gap-3 p-6 text-center">
               <div className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center">
-                <X className="h-6 w-6" />
+                <AlertTriangle className="h-6 w-6" />
               </div>
               <p className="text-sm font-bold text-red-400 max-w-md">{error}</p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="mt-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition-colors"
-              >
-                Close Room
-              </button>
+              <div className="flex gap-2.5 mt-2">
+                <button
+                  type="button"
+                  onClick={initializeCall}
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition-colors flex items-center gap-1.5 shadow-btn"
+                >
+                  <Camera className="h-4 w-4" />
+                  <span>Enable Camera / Retry</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExitCall}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition-colors"
+                >
+                  Close Window
+                </button>
+              </div>
             </div>
           )}
 
-          <div
-            ref={containerRef}
-            className="w-full h-full [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:border-0"
-          />
+          {/* Connected State: Remote Participant (Main View) */}
+          {isPeerConnected && remoteStream ? (
+            <div className="relative w-full h-full rounded-2xl overflow-hidden bg-slate-900 flex items-center justify-center">
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover rounded-2xl"
+              />
+              <div className="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-700/60 text-white text-xs font-bold flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <span>{otherPersonTitle}</span>
+              </div>
+            </div>
+          ) : (
+            /* Waiting State: Show Local Stream in Center with Waiting Notice */
+            <div className="relative w-full h-full max-w-3xl rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className={`w-full h-full object-cover ${isVideoMuted ? 'hidden' : ''}`}
+              />
+
+              {isVideoMuted && (
+                <div className="flex flex-col items-center justify-center text-slate-500 gap-3">
+                  <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center">
+                    <VideoOff className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <p className="text-sm font-semibold">Your Camera is Off</p>
+                </div>
+              )}
+
+              {/* Waiting Badge overlay */}
+              {!error && !isConnecting && (
+                <div className="absolute top-4 left-4 right-4 sm:right-auto bg-slate-950/85 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800 text-white flex items-center gap-3 shadow-xl">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
+                    <Users className="h-4 w-4 animate-pulse" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-100">
+                      Waiting for {otherPersonTitle} to join...
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Your video is live. Connection will link up automatically.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Picture-in-Picture: Local Video Preview when Connected */}
+          {isPeerConnected && (
+            <div className="absolute bottom-20 right-4 sm:bottom-24 sm:right-6 w-32 h-24 sm:w-48 sm:h-32 rounded-2xl overflow-hidden border-2 border-blue-500/50 shadow-2xl bg-slate-900 z-10">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className={`w-full h-full object-cover ${isVideoMuted ? 'hidden' : ''}`}
+              />
+              {isVideoMuted && (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-400 text-xs">
+                  <VideoOff className="h-5 w-5 mb-1" />
+                  <span>Camera Off</span>
+                </div>
+              )}
+              <div className="absolute bottom-1.5 left-1.5 bg-slate-950/80 px-2 py-0.5 rounded text-[9px] font-bold text-white">
+                You ({userRole === 'DOCTOR' ? 'Doctor' : 'Patient'})
+              </div>
+            </div>
+          )}
+
+          {/* ─── Bottom Floating Controls Toolbar ─────────────────────────────── */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl shadow-2xl flex items-center gap-2.5 sm:gap-3 z-30">
+            {/* Mute Audio */}
+            <button
+              type="button"
+              onClick={toggleAudio}
+              className={`p-2.5 sm:p-3 rounded-xl font-bold transition-all ${
+                isAudioMuted
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+              }`}
+              title={isAudioMuted ? 'Unmute Microphone' : 'Mute Microphone'}
+            >
+              {isAudioMuted ? <MicOff className="h-4 w-4 sm:h-5 sm:w-5" /> : <Mic className="h-4 w-4 sm:h-5 sm:w-5" />}
+            </button>
+
+            {/* Mute Video */}
+            <button
+              type="button"
+              onClick={toggleVideo}
+              className={`p-2.5 sm:p-3 rounded-xl font-bold transition-all ${
+                isVideoMuted
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+              }`}
+              title={isVideoMuted ? 'Turn Camera On' : 'Turn Camera Off'}
+            >
+              {isVideoMuted ? <VideoOff className="h-4 w-4 sm:h-5 sm:w-5" /> : <Video className="h-4 w-4 sm:h-5 sm:w-5" />}
+            </button>
+
+            {/* Screen Share (Desktop only) */}
+            <button
+              type="button"
+              onClick={toggleScreenShare}
+              className={`p-2.5 sm:p-3 rounded-xl font-bold transition-all hidden sm:block ${
+                isScreenSharing
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+              }`}
+              title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
+            >
+              <ScreenShare className="h-5 w-5" />
+            </button>
+
+            {/* Leave / Hangup */}
+            <button
+              type="button"
+              onClick={handleExitCall}
+              className="px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold transition-all shadow-btn flex items-center gap-1.5"
+              title="Leave Consultation"
+            >
+              <PhoneOff className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+              <span className="hidden sm:inline">End Visit</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
