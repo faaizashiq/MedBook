@@ -20,6 +20,8 @@ import {
   Eye,
   CalendarDays,
   Sparkles,
+  DollarSign,
+  Clock,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Logo } from '@/components/ui/Logo'
@@ -353,13 +355,34 @@ export function Navbar() {
                 )}
 
                 {isDoctor && (
-                  <Link
-                    href={`/doctors/${user.id}`}
-                    className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-center text-xs font-bold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Eye className="h-4 w-4 text-emerald-600" />
-                    View Public Profile
-                  </Link>
+                  <>
+                    <Link
+                      href="/doctor/setup?tab=fee"
+                      onClick={() => setMobileOpen(false)}
+                      className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-center text-xs font-bold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <DollarSign className="h-4 w-4 text-emerald-600" />
+                      Update Consultation Fee
+                    </Link>
+
+                    <Link
+                      href="/doctor/setup?tab=schedule"
+                      onClick={() => setMobileOpen(false)}
+                      className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-center text-xs font-bold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Clock className="h-4 w-4 text-blue-600" />
+                      Update Availability
+                    </Link>
+
+                    <Link
+                      href={`/doctors/${user.id}`}
+                      onClick={() => setMobileOpen(false)}
+                      className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-center text-xs font-bold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Eye className="h-4 w-4 text-indigo-600" />
+                      View Public Profile
+                    </Link>
+                  </>
                 )}
 
                 <button

@@ -20,11 +20,20 @@ function getAuthenticatedUser(req: NextRequest) {
   return verifyJWT(token)
 }
 
-function formatDateTime(isoString: string) {
-  const date = new Date(isoString)
-  return {
-    date: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-    time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+function formatDateTime(isoString: string, timeZone?: string) {
+  try {
+    const date = new Date(isoString)
+    const tz = timeZone || 'Asia/Karachi'
+    return {
+      date: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: tz }),
+      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz }),
+    }
+  } catch {
+    const date = new Date(isoString)
+    return {
+      date: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    }
   }
 }
 

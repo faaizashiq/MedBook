@@ -66,8 +66,8 @@ function FAQItem({
   return (
     <div
       className={`border rounded-2xl transition-all duration-200 ${isOpen
-          ? 'border-primary-100 bg-primary-50/40'
-          : 'border-border bg-white hover:border-primary-100'
+        ? 'border-primary-100 bg-primary-50/40'
+        : 'border-border bg-white hover:border-primary-100'
         }`}
     >
       <button
@@ -85,8 +85,8 @@ function FAQItem({
 
         <div
           className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200 ${isOpen
-              ? 'bg-primary text-white rotate-180'
-              : 'bg-slate-100 text-text-secondary'
+            ? 'bg-primary text-white rotate-180'
+            : 'bg-slate-100 text-text-secondary'
             }`}
         >
           <ChevronDown className="h-4 w-4" />
@@ -207,10 +207,10 @@ export default function ContactPage() {
                   </p>
 
                   <a
-                    href="mailto:support@medbook.com"
+                    href="mailto:medbook.application@gmail.com"
                     className="inline-block mt-2 text-sm font-semibold text-primary hover:text-primary-700 transition-colors"
                   >
-                    support@medbook.com
+                    medbook.application@gmail.com
                   </a>
                 </div>
 

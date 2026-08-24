@@ -58,6 +58,7 @@ export async function createAppointment(data: {
   type?: string
   location?: string
   notes?: string
+  timeZone?: string
 }): Promise<{ appointment: ApiAppointment; message: string }> {
   const res = await apiFetch<{ appointment: ApiAppointment; message: string }>('/api/appointments', {
     method: 'POST',
@@ -106,6 +107,18 @@ export async function confirmAppointmentApi(
   const res = await apiFetch<{ appointment: ApiAppointment; message: string }>(`/api/appointments/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ action: 'CONFIRM' }),
+  })
+  notifyAppointmentSync()
+  return res
+}
+
+// 5b. Doctor Complete appointment
+export async function completeAppointmentApi(
+  id: string | number
+): Promise<{ appointment: ApiAppointment; message: string }> {
+  const res = await apiFetch<{ appointment: ApiAppointment; message: string }>(`/api/appointments/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'COMPLETE', status: 'COMPLETED' }),
   })
   notifyAppointmentSync()
   return res

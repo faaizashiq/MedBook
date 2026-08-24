@@ -49,20 +49,32 @@ const SPECIALTIES = [
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-// Full 9:00 AM to 9:00 PM slots spectrum (13 hourly slots)
+// Full 9:00 AM to 9:00 PM 30-minute consultation slots (25 half-hour slots)
 const ALL_AVAILABLE_SLOTS = [
   '09:00 AM',
+  '09:30 AM',
   '10:00 AM',
+  '10:30 AM',
   '11:00 AM',
+  '11:30 AM',
   '12:00 PM',
+  '12:30 PM',
   '01:00 PM',
+  '01:30 PM',
   '02:00 PM',
+  '02:30 PM',
   '03:00 PM',
+  '03:30 PM',
   '04:00 PM',
+  '04:30 PM',
   '05:00 PM',
+  '05:30 PM',
   '06:00 PM',
+  '06:30 PM',
   '07:00 PM',
+  '07:30 PM',
   '08:00 PM',
+  '08:30 PM',
   '09:00 PM',
 ]
 
@@ -73,7 +85,7 @@ const SLOT_PERIODS = [
     icon: Sunrise,
     color: 'text-amber-600 bg-amber-50 border-amber-200',
     badge: 'bg-amber-100/70 text-amber-800',
-    slots: ['09:00 AM', '10:00 AM', '11:00 AM'],
+    slots: ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM'],
   },
   {
     name: 'Afternoon',
@@ -81,7 +93,18 @@ const SLOT_PERIODS = [
     icon: Sun,
     color: 'text-blue-600 bg-blue-50 border-blue-200',
     badge: 'bg-blue-100/70 text-blue-800',
-    slots: ['12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM'],
+    slots: [
+      '12:00 PM',
+      '12:30 PM',
+      '01:00 PM',
+      '01:30 PM',
+      '02:00 PM',
+      '02:30 PM',
+      '03:00 PM',
+      '03:30 PM',
+      '04:00 PM',
+      '04:30 PM',
+    ],
   },
   {
     name: 'Evening',
@@ -89,19 +112,37 @@ const SLOT_PERIODS = [
     icon: Moon,
     color: 'text-indigo-600 bg-indigo-50 border-indigo-200',
     badge: 'bg-indigo-100/70 text-indigo-800',
-    slots: ['05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM'],
+    slots: [
+      '05:00 PM',
+      '05:30 PM',
+      '06:00 PM',
+      '06:30 PM',
+      '07:00 PM',
+      '07:30 PM',
+      '08:00 PM',
+      '08:30 PM',
+      '09:00 PM',
+    ],
   },
 ]
 
 const DEFAULT_ACTIVE_SLOTS = [
   '09:00 AM',
+  '09:30 AM',
   '10:00 AM',
+  '10:30 AM',
   '11:00 AM',
+  '11:30 AM',
   '12:00 PM',
+  '12:30 PM',
   '01:00 PM',
+  '01:30 PM',
   '02:00 PM',
+  '02:30 PM',
   '03:00 PM',
+  '03:30 PM',
   '04:00 PM',
+  '04:30 PM',
   '05:00 PM',
 ]
 
@@ -226,6 +267,18 @@ function DoctorSetupContent() {
     })
   }
 
+  // Master Day Off Toggle (Clears slots if active, restores standard 9-5 slots if off)
+  const toggleDayOff = (day: string) => {
+    setAvailability((prev) => {
+      const current = prev[day] || []
+      const isWorking = current.length > 0
+      return {
+        ...prev,
+        [day]: isWorking ? [] : [...DEFAULT_ACTIVE_SLOTS],
+      }
+    })
+  }
+
   // Copy schedule from one day to all weekdays (Mon-Fri)
   const copyDayToWeekdays = (fromDay: string) => {
     const template = availability[fromDay] || []
@@ -242,7 +295,9 @@ function DoctorSetupContent() {
   }
 
   // Apply Global Presets across weekdays
-  const applyGlobalPreset = (type: 'full-9-9' | 'standard-9-5' | 'morning-only' | 'evening-only' | 'clear-all') => {
+  const applyGlobalPreset = (
+    type: 'full-9-9' | 'standard-9-5' | 'morning-only' | 'evening-only' | 'clear-all'
+  ) => {
     if (type === 'clear-all') {
       const empty: Record<string, string[]> = {}
       DAYS.forEach((d) => {
@@ -256,21 +311,33 @@ function DoctorSetupContent() {
     if (type === 'full-9-9') {
       targetSlots = [...ALL_AVAILABLE_SLOTS]
     } else if (type === 'standard-9-5') {
+      targetSlots = [...DEFAULT_ACTIVE_SLOTS]
+    } else if (type === 'morning-only') {
       targetSlots = [
         '09:00 AM',
+        '09:30 AM',
         '10:00 AM',
+        '10:30 AM',
         '11:00 AM',
+        '11:30 AM',
         '12:00 PM',
+        '12:30 PM',
         '01:00 PM',
-        '02:00 PM',
-        '03:00 PM',
-        '04:00 PM',
-        '05:00 PM',
       ]
-    } else if (type === 'morning-only') {
-      targetSlots = ['09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM']
     } else if (type === 'evening-only') {
-      targetSlots = ['05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM']
+      targetSlots = [
+        '04:00 PM',
+        '04:30 PM',
+        '05:00 PM',
+        '05:30 PM',
+        '06:00 PM',
+        '06:30 PM',
+        '07:00 PM',
+        '07:30 PM',
+        '08:00 PM',
+        '08:30 PM',
+        '09:00 PM',
+      ]
     }
 
     setAvailability((prev) => ({
@@ -280,13 +347,20 @@ function DoctorSetupContent() {
       Wed: [...targetSlots],
       Thu: [...targetSlots],
       Fri: [...targetSlots],
-      Sat: ['10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM'],
+      Sat: prev.Sat?.length ? prev.Sat : [],
+      Sun: prev.Sun?.length ? prev.Sun : [],
     }))
   }
 
   // Calculate statistics
-  const totalWeeklySlots = Object.values(availability).reduce((acc, curr) => acc + (curr?.length || 0), 0)
-  const activeDaysCount = Object.values(availability).filter((slots) => slots && slots.length > 0).length
+  const totalWeeklySlots = Object.values(availability).reduce(
+    (acc, curr) => acc + (curr?.length || 0),
+    0
+  )
+  const activeDaysCount = Object.values(availability).filter(
+    (slots) => slots && slots.length > 0
+  ).length
+  const totalWeeklyHours = (totalWeeklySlots * 0.5).toFixed(1)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -365,11 +439,11 @@ function DoctorSetupContent() {
         </div>
 
         {/* Step / Tab Switcher (Direct Clickable Tabs) */}
-        <div className="grid grid-cols-3 gap-2 mb-8 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-8 bg-white p-1.5 sm:p-2 rounded-2xl border border-slate-200 shadow-sm">
           {[
-            { s: 1, label: 'Profile & Bio', icon: Stethoscope },
+            { s: 1, label: 'Profile', icon: Stethoscope },
             { s: 2, label: 'Fee & Clinic', icon: DollarSign },
-            { s: 3, label: 'Schedule Grid', icon: CalendarDays },
+            { s: 3, label: 'Availability', icon: CalendarDays },
           ].map(({ s, label, icon: Icon }) => (
             <button
               key={s}
@@ -378,14 +452,14 @@ function DoctorSetupContent() {
                 setStep(s as 1 | 2 | 3)
                 setSavedSuccess(false)
               }}
-              className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center justify-center gap-1.5 py-2.5 sm:py-3 px-2 sm:px-3 rounded-xl text-[11px] sm:text-xs font-semibold transition-all ${
                 step === s
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
-              <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{label}</span>
+              <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span>{label}</span>
             </button>
           ))}
         </div>
@@ -554,20 +628,24 @@ function DoctorSetupContent() {
                   <div>
                     <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                       <Clock className="h-4 w-4 text-blue-600" />
-                      Consultation Time Slots (9:00 AM – 9:00 PM)
+                      30-Minute Consultation Slots (9:00 AM – 9:00 PM)
                     </h3>
                     <p className="text-[11px] text-slate-600 mt-0.5">
-                      Select which hourly slots patients can book for each day of the week.
+                      Enable or disable half-hour consultation sessions and manage your days off.
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <div className="px-2.5 py-1 rounded-xl bg-white border border-blue-200/60 shadow-xs text-center">
+                    <div className="px-3 py-1.5 rounded-xl bg-white border border-blue-200/60 shadow-xs text-center">
                       <span className="block text-[10px] uppercase font-bold text-slate-400">Total Slots</span>
                       <span className="text-xs font-extrabold text-blue-700">{totalWeeklySlots} / wk</span>
                     </div>
-                    <div className="px-2.5 py-1 rounded-xl bg-white border border-blue-200/60 shadow-xs text-center">
-                      <span className="block text-[10px] uppercase font-bold text-slate-400">Active Days</span>
+                    <div className="px-3 py-1.5 rounded-xl bg-white border border-blue-200/60 shadow-xs text-center">
+                      <span className="block text-[10px] uppercase font-bold text-slate-400">Weekly Hours</span>
+                      <span className="text-xs font-extrabold text-emerald-700">{totalWeeklyHours} hrs</span>
+                    </div>
+                    <div className="px-3 py-1.5 rounded-xl bg-white border border-blue-200/60 shadow-xs text-center">
+                      <span className="block text-[10px] uppercase font-bold text-slate-400">Working Days</span>
                       <span className="text-xs font-extrabold text-indigo-700">{activeDaysCount} / 7 days</span>
                     </div>
                   </div>
@@ -586,20 +664,20 @@ function DoctorSetupContent() {
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      onClick={() => applyGlobalPreset('full-9-9')}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-all flex items-center gap-1.5"
+                      onClick={() => applyGlobalPreset('standard-9-5')}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-all flex items-center gap-1.5 shadow-xs"
                     >
-                      <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-                      Full 9 AM – 9 PM
+                      <Sun className="h-3.5 w-3.5 text-blue-600" />
+                      Standard (9 AM – 5 PM)
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => applyGlobalPreset('standard-9-5')}
+                      onClick={() => applyGlobalPreset('full-9-9')}
                       className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all flex items-center gap-1.5"
                     >
-                      <Sun className="h-3.5 w-3.5 text-amber-500" />
-                      Standard (9 AM – 5 PM)
+                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                      Full (9 AM – 9 PM)
                     </button>
 
                     <button
@@ -617,7 +695,7 @@ function DoctorSetupContent() {
                       className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100 transition-all flex items-center gap-1.5"
                     >
                       <Moon className="h-3.5 w-3.5 text-indigo-600" />
-                      Evening (5 PM – 9 PM)
+                      Evening (4 PM – 9 PM)
                     </button>
 
                     <button
@@ -626,7 +704,7 @@ function DoctorSetupContent() {
                       className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-rose-600 border border-rose-200 hover:bg-rose-50 transition-all flex items-center gap-1.5 ml-auto"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
-                      Clear All
+                      Clear All (All Days Off)
                     </button>
                   </div>
                 </div>
@@ -645,137 +723,157 @@ function DoctorSetupContent() {
                         className={`p-4 rounded-2xl border transition-all ${
                           isWorking
                             ? 'bg-slate-50/80 border-slate-200 shadow-xs'
-                            : 'bg-slate-100/40 border-slate-200/60 opacity-65'
+                            : 'bg-slate-100/50 border-slate-200/80'
                         }`}
                       >
                         {/* Day Header */}
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 mb-3.5 pb-2.5 border-b border-slate-200/70">
-                          <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2.5 border-b border-slate-200/70">
+                          <div className="flex items-center gap-3">
                             <span className="w-12 font-extrabold text-sm text-slate-800">{day}</span>
+
+                            {/* Master Day Toggle Switch */}
+                            <button
+                              type="button"
+                              onClick={() => toggleDayOff(day)}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                                isWorking ? 'bg-emerald-600' : 'bg-slate-300'
+                              }`}
+                              title={isWorking ? `Click to mark ${day} as Day Off` : `Click to mark ${day} as Working Day`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  isWorking ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+
                             <span
                               className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
                                 isFullDay
                                   ? 'bg-blue-100 text-blue-800 border border-blue-200'
                                   : isWorking
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-slate-200 text-slate-500'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
                               }`}
                             >
                               {isFullDay
-                                ? 'All 13 Slots Active (9 AM - 9 PM)'
+                                ? `All 25 Slots Active (12.5 hrs)`
                                 : isWorking
-                                ? `${slots.length} slots active`
-                                : 'Day Off'}
+                                ? `${slots.length} slots active (${(slots.length * 0.5).toFixed(1)} hrs)`
+                                : '🔴 Day Off'}
                             </span>
                           </div>
 
-                          {/* Quick Toggles for this Day */}
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => togglePeriodSlots(day, ['09:00 AM', '10:00 AM', '11:00 AM'])}
-                              className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-amber-400 hover:text-amber-700 hover:bg-amber-50/50 transition-all"
-                            >
-                              Morning (9-12)
-                            </button>
+                          {/* Quick Actions for this Day (when working) */}
+                          {isWorking && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => togglePeriodSlots(day, SLOT_PERIODS[0].slots)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-amber-400 hover:text-amber-700 hover:bg-amber-50/50 transition-all"
+                              >
+                                Morning (9-12)
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                togglePeriodSlots(day, [
-                                  '12:00 PM',
-                                  '01:00 PM',
-                                  '02:00 PM',
-                                  '03:00 PM',
-                                  '04:00 PM',
-                                ])
-                              }
-                              className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50/50 transition-all"
-                            >
-                              Afternoon (12-5)
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => togglePeriodSlots(day, SLOT_PERIODS[1].slots)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50/50 transition-all"
+                              >
+                                Afternoon (12-5)
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                togglePeriodSlots(day, [
-                                  '05:00 PM',
-                                  '06:00 PM',
-                                  '07:00 PM',
-                                  '08:00 PM',
-                                  '09:00 PM',
-                                ])
-                              }
-                              className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-indigo-400 hover:text-indigo-700 hover:bg-indigo-50/50 transition-all"
-                            >
-                              Evening (5-9)
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => togglePeriodSlots(day, SLOT_PERIODS[2].slots)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-indigo-400 hover:text-indigo-700 hover:bg-indigo-50/50 transition-all"
+                              >
+                                Evening (5-9)
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() => toggleFullDay(day)}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                                isFullDay
-                                  ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-                                  : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
-                              }`}
-                            >
-                              {isFullDay ? 'Clear Day' : isWorking ? 'Select All 9-9' : 'Set 9-9'}
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleFullDay(day)}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                                  isFullDay
+                                    ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                                    : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                                }`}
+                              >
+                                {isFullDay ? 'Clear' : 'Select All 9-9'}
+                              </button>
 
+                              <button
+                                type="button"
+                                onClick={() => copyDayToWeekdays(day)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-300 transition-all flex items-center gap-1"
+                                title={`Copy ${day}'s slots to Mon–Fri`}
+                              >
+                                {isJustCopied ? (
+                                  <>
+                                    <Check className="h-3 w-3 text-emerald-600" />
+                                    <span className="text-emerald-700 font-bold">Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-3 w-3 text-slate-400" />
+                                    <span>To Mon–Fri</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Collapsed State for Day Off */}
+                        {!isWorking ? (
+                          <div className="mt-2.5 flex items-center justify-between py-2.5 px-3.5 bg-white/80 rounded-xl border border-slate-200/60 text-xs text-slate-500">
+                            <span className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-rose-400" />
+                              Doctor is off on {day} — No patient consultations will be scheduled.
+                            </span>
                             <button
                               type="button"
-                              onClick={() => copyDayToWeekdays(day)}
-                              className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-300 transition-all flex items-center gap-1"
-                              title={`Copy ${day}'s slots to Mon–Fri`}
+                              onClick={() => toggleDayOff(day)}
+                              className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
                             >
-                              {isJustCopied ? (
-                                <>
-                                  <Check className="h-3 w-3 text-emerald-600" />
-                                  <span className="text-emerald-700 font-bold">Copied!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-3 w-3 text-slate-400" />
-                                  <span>To Mon–Fri</span>
-                                </>
-                              )}
+                              Set as Working Day
                             </button>
                           </div>
-                        </div>
+                        ) : (
+                          /* 25 Half-Hour Slots (9:00 AM – 9:00 PM) */
+                          <div className="mt-3.5 space-y-2.5">
+                            {SLOT_PERIODS.map((period) => (
+                              <div key={period.name} className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                <span className="w-20 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                  <period.icon className="h-3 w-3 text-slate-400" />
+                                  {period.name}
+                                </span>
 
-                        {/* All 13 Hourly Slots (9:00 AM – 9:00 PM) */}
-                        <div className="space-y-2.5">
-                          {SLOT_PERIODS.map((period) => (
-                            <div key={period.name} className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                              <span className="w-20 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                                <period.icon className="h-3 w-3 text-slate-400" />
-                                {period.name}
-                              </span>
-
-                              <div className="flex-1 grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-                                {period.slots.map((slot) => {
-                                  const active = slots.includes(slot)
-                                  return (
-                                    <button
-                                      key={slot}
-                                      type="button"
-                                      onClick={() => toggleDaySlot(day, slot)}
-                                      className={`py-2 px-2.5 rounded-xl text-[11px] font-bold border transition-all flex items-center justify-center gap-1 ${
-                                        active
-                                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-600/20'
-                                          : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
-                                      }`}
-                                    >
-                                      {active && <Check className="h-3 w-3 stroke-[3]" />}
-                                      <span>{slot}</span>
-                                    </button>
-                                  )
-                                })}
+                                <div className="flex-1 grid grid-cols-2 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
+                                  {period.slots.map((slot) => {
+                                    const active = slots.includes(slot)
+                                    return (
+                                      <button
+                                        key={slot}
+                                        type="button"
+                                        onClick={() => toggleDaySlot(day, slot)}
+                                        className={`py-1.5 px-2 rounded-xl text-[11px] font-bold border transition-all flex items-center justify-center gap-1 ${
+                                          active
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-600/20'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
+                                        }`}
+                                      >
+                                        {active && <Check className="h-3 w-3 stroke-[3]" />}
+                                        <span>{slot}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )
                   })}

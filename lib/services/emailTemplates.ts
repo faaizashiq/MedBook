@@ -1,8 +1,8 @@
 // TypeScript embedded email templates — 100% reliable on Vercel Serverless (no filesystem dependency)
 
 export const EMAIL_TEMPLATES: Record<string, string> = {
-  // 1. APPOINTMENT BOOKED (Pending Confirmation)
-  booked: `<!DOCTYPE html>
+    // 1. APPOINTMENT BOOKED (Pending Confirmation)
+    booked: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -58,8 +58,8 @@ export const EMAIL_TEMPLATES: Record<string, string> = {
 </body>
 </html>`,
 
-  // 2. APPOINTMENT CONFIRMED
-  confirmed: `<!DOCTYPE html>
+    // 2. APPOINTMENT CONFIRMED
+    confirmed: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -122,8 +122,8 @@ export const EMAIL_TEMPLATES: Record<string, string> = {
 </body>
 </html>`,
 
-  // 3. APPOINTMENT REMINDER
-  reminder: `<!DOCTYPE html>
+    // 3. APPOINTMENT REMINDER
+    reminder: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -181,8 +181,8 @@ export const EMAIL_TEMPLATES: Record<string, string> = {
 </body>
 </html>`,
 
-  // 4. DOCTOR NEW REQUEST
-  doctor_new_request: `<!DOCTYPE html>
+    // 4. DOCTOR NEW REQUEST
+    doctor_new_request: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -242,8 +242,8 @@ export const EMAIL_TEMPLATES: Record<string, string> = {
 </body>
 </html>`,
 
-  // 5. APPOINTMENT CANCELLED
-  cancelled: `<!DOCTYPE html>
+    // 5. APPOINTMENT CANCELLED
+    cancelled: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -309,8 +309,8 @@ export const EMAIL_TEMPLATES: Record<string, string> = {
 </body>
 </html>`,
 
-  // 6. APPOINTMENT DECLINED
-  declined: `<!DOCTYPE html>
+    // 6. APPOINTMENT DECLINED
+    declined: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -375,8 +375,8 @@ export const EMAIL_TEMPLATES: Record<string, string> = {
 </body>
 </html>`,
 
-  // 7. APPOINTMENT RESCHEDULED
-  rescheduled: `<!DOCTYPE html>
+    // 7. APPOINTMENT RESCHEDULED
+    rescheduled: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -442,8 +442,8 @@ export const EMAIL_TEMPLATES: Record<string, string> = {
 </body>
 </html>`,
 
-  // 8. RESET PASSWORD
-  reset_password: `<!DOCTYPE html>
+    // 8. RESET PASSWORD
+    reset_password: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />

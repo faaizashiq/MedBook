@@ -26,10 +26,12 @@ import {
   Edit3,
   X,
   Camera,
+  DollarSign,
 } from 'lucide-react'
 import {
   getAppointments,
   confirmAppointmentApi,
+  completeAppointmentApi,
   cancelAppointmentApi,
   AppointmentStatus,
   ApiAppointment,
@@ -37,6 +39,7 @@ import {
 import { Avatar } from '@/components/ui/Avatar'
 import { AvatarPicker } from '@/components/ui/AvatarPicker'
 import { apiFetch } from '@/lib/api/client'
+import VideoConsultationModal from '@/components/consultation/VideoConsultationModal'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -140,10 +143,14 @@ function AppointmentCard({
   appointment,
   onConfirm,
   onDecline,
+  onComplete,
+  onJoinVideoCall,
 }: {
   appointment: DoctorAppointment
   onConfirm?: () => void
   onDecline?: () => void
+  onComplete?: () => void
+  onJoinVideoCall?: () => void
 }) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-200 hover:shadow-sm transition-all">
@@ -222,7 +229,7 @@ function AppointmentCard({
           )}
 
           {appointment.status === 'CONFIRMED' && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap lg:justify-end">
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
                 <CheckCircle2 className="w-4 h-4" />
                 Confirmed
@@ -231,12 +238,23 @@ function AppointmentCard({
               {appointment.type === 'Video Consultation' && (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm"
+                  onClick={onJoinVideoCall}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-btn transition-all"
                 >
                   <Video className="w-3.5 h-3.5" />
-                  Join
+                  <span>Join Video Call</span>
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={onComplete}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-all shadow-sm"
+                title="Mark consultation as completed"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Mark Completed</span>
+              </button>
             </div>
           )}
 
@@ -401,6 +419,7 @@ export default function DoctorDashboard() {
 
   const [declineId, setDeclineId] = useState<string | number | null>(null)
   const [declineReason, setDeclineReason] = useState('')
+  const [activeVideoCall, setActiveVideoCall] = useState<DoctorAppointment | null>(null)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showEditProfileModal, setShowEditProfileModal] = useState(false)
 
@@ -443,6 +462,10 @@ export default function DoctorDashboard() {
         if (res?.appointments) {
           const mapped: DoctorAppointment[] = res.appointments.map((item: ApiAppointment) => {
             const { date, time } = parseDateAndTime(item.scheduled_at)
+            const isTimePassed = item.scheduled_at ? new Date(item.scheduled_at).getTime() <= Date.now() : false
+            const effectiveStatus: AppointmentStatus =
+              item.status === 'CONFIRMED' && isTimePassed ? 'COMPLETED' : item.status
+
             return {
               id: item.id,
               patientId: item.patient?.id || '',
@@ -450,7 +473,7 @@ export default function DoctorDashboard() {
               patientEmail: item.patient?.email,
               date,
               time,
-              status: item.status,
+              status: effectiveStatus,
               type: item.type,
               location: item.location,
               cancellationReason: item.cancellation_reason,
@@ -525,14 +548,29 @@ export default function DoctorDashboard() {
       (appointment) => appointment.status === 'CONFIRMED'
     ).length
 
+    const completed = appointments.filter(
+      (appointment) => appointment.status === 'COMPLETED'
+    ).length
+
+    const confirmedAndCompleted = appointments.filter(
+      (appointment) => appointment.status === 'CONFIRMED' || appointment.status === 'COMPLETED'
+    ).length
+
     const pending = appointments.filter(
       (appointment) => appointment.status === 'PENDING' || appointment.status === 'RESCHEDULED'
+    ).length
+
+    const history = appointments.filter(
+      (appointment) => appointment.status === 'COMPLETED' || appointment.status === 'CANCELLED'
     ).length
 
     return {
       totalPatients,
       confirmed,
+      completed,
+      confirmedAndCompleted,
       pending,
+      history,
       totalAppointments: appointments.length,
     }
   }, [appointments])
@@ -575,13 +613,42 @@ export default function DoctorDashboard() {
     )
   }
 
+  // ─── Complete appointment
+  const handleComplete = async (id: string | number) => {
+    try {
+      await completeAppointmentApi(id)
+    } catch (err) {
+      console.warn('Complete API warning:', err)
+    }
+
+    setAppointments((current) =>
+      current.map((appointment) =>
+        appointment.id === id
+          ? {
+              ...appointment,
+              status: 'COMPLETED' as AppointmentStatus,
+            }
+          : appointment
+      )
+    )
+  }
+
+  const [selectedDeclinePreset, setSelectedDeclinePreset] = useState(
+    'Schedule conflict at this requested consultation time'
+  )
+
   // ─── Decline appointment
   const handleDecline = async () => {
     if (!declineId) return
-    const reason = declineReason.trim() || 'Appointment request declined by doctor.'
+    const finalReason =
+      selectedDeclinePreset === 'Other reason'
+        ? declineReason.trim() || 'Appointment request declined by doctor.'
+        : declineReason.trim()
+        ? `${selectedDeclinePreset} — ${declineReason.trim()}`
+        : selectedDeclinePreset
 
     try {
-      await cancelAppointmentApi(declineId, reason)
+      await cancelAppointmentApi(declineId, finalReason)
     } catch (err) {
       console.warn('Decline API warning:', err)
     }
@@ -592,7 +659,7 @@ export default function DoctorDashboard() {
           ? {
               ...appointment,
               status: 'CANCELLED' as AppointmentStatus,
-              cancellationReason: reason,
+              cancellationReason: finalReason,
             }
           : appointment
       )
@@ -645,23 +712,42 @@ export default function DoctorDashboard() {
             </div>
 
             {/* Action Buttons (Docked to the RIGHT side on mobile & desktop) */}
-            <div className="flex items-center justify-end gap-2 sm:gap-3 self-end sm:self-auto w-full sm:w-auto">
-              <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
+            <div className="flex items-center justify-end gap-2 flex-wrap sm:flex-nowrap self-end sm:self-auto w-full sm:w-auto">
+              <div className="hidden lg:flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-xs font-semibold text-emerald-700">
                   Accepting Appointments
                 </span>
               </div>
 
+              {/* Update Fee Button (Mobile & Desktop) */}
+              <Link
+                href="/doctor/setup?tab=fee"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-semibold transition-all shadow-xs"
+                title="Update your consultation fee"
+              >
+                <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Fee</span>
+              </Link>
+
+              {/* Update Availability Button (Mobile & Desktop) */}
+              <Link
+                href="/doctor/setup?tab=schedule"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-semibold transition-all shadow-xs"
+                title="Update your weekly consultation hours & slots"
+              >
+                <Clock3 className="w-3.5 h-3.5 text-blue-600" />
+                <span>Availability</span>
+              </Link>
+
               {/* View Public Profile Button */}
               <Link
                 href={`/doctors/${user?.id || ''}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-semibold transition-all shadow-xs"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-semibold transition-all shadow-xs"
                 title="View your public doctor profile as patients see it"
               >
-                <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">View Public Profile</span>
-                <span className="sm:hidden">Public</span>
+                <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden sm:inline">Public</span>
               </Link>
 
               {/* Edit Profile & Avatar Button */}
@@ -692,10 +778,14 @@ export default function DoctorDashboard() {
 
           <StatCard
             title="Confirmed Visits"
-            value={stats.confirmed}
+            value={stats.confirmedAndCompleted}
             icon={CheckCircle2}
             iconClass="bg-emerald-50 text-emerald-600"
-            description="Upcoming scheduled visits"
+            description={
+              stats.completed > 0
+                ? `${stats.confirmed} upcoming • ${stats.completed} completed`
+                : 'All confirmed consultations'
+            }
           />
 
           <StatCard
@@ -727,18 +817,20 @@ export default function DoctorDashboard() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Link
                   href="/doctor/setup?tab=fee"
-                  className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-blue-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-blue-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors"
                 >
+                  <DollarSign className="w-3 h-3 text-emerald-600" />
                   Update Fee
                 </Link>
 
                 <Link
                   href="/doctor/setup?tab=schedule"
-                  className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition-colors"
                 >
+                  <Clock3 className="w-3 h-3 text-blue-600" />
                   Update Availability
                   <ChevronRight className="w-3.5 h-3.5" />
                 </Link>
@@ -753,9 +845,7 @@ export default function DoctorDashboard() {
                 {
                   id: 'history',
                   label: 'History',
-                  count: appointments.filter(
-                    (a) => a.status === 'COMPLETED' || a.status === 'CANCELLED'
-                  ).length,
+                  count: stats.history,
                 },
               ].map((tab) => (
                 <button
@@ -799,6 +889,8 @@ export default function DoctorDashboard() {
                     appointment={appointment}
                     onConfirm={() => handleConfirm(appointment.id)}
                     onDecline={() => setDeclineId(appointment.id)}
+                    onComplete={() => handleComplete(appointment.id)}
+                    onJoinVideoCall={() => setActiveVideoCall(appointment)}
                   />
                 ))}
               </div>
@@ -824,6 +916,22 @@ export default function DoctorDashboard() {
         </section>
       </main>
 
+      {/* Video Consultation Modal */}
+      {activeVideoCall && (
+        <VideoConsultationModal
+          isOpen={activeVideoCall !== null}
+          onClose={() => setActiveVideoCall(null)}
+          appointmentId={activeVideoCall.id}
+          patientName={activeVideoCall.patientName}
+          doctorName={user?.fullName || 'Doctor'}
+          userRole="DOCTOR"
+          userEmail={user?.email || ''}
+          onCallEnd={() => {
+            // Video consultation ended
+          }}
+        />
+      )}
+
       {/* Edit Doctor Profile Modal */}
       {showEditProfileModal && (
         <EditDoctorProfileModal
@@ -837,53 +945,90 @@ export default function DoctorDashboard() {
 
       {/* Decline Modal */}
       {declineId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-slate-900/40 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6">
-            <div className="flex items-start gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
-                <XCircle className="w-5 h-5 text-red-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+                <XCircle className="w-5 h-5" />
               </div>
 
               <div>
-                <h3 className="font-bold text-slate-900">Decline Appointment</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Are you sure you want to decline this patient consultation request?
+                <h3 className="font-bold text-slate-900">Decline Appointment Request</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Please select a reason to notify the patient.
                 </p>
               </div>
             </div>
 
-            <label htmlFor="decline-reason" className="block text-xs font-semibold text-slate-700 mb-2">
-              Reason <span className="font-normal text-slate-400">(optional)</span>
-            </label>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-2">
+                  Decline Reason <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {[
+                    'Emergency surgery / Hospital on-call duties',
+                    'Schedule conflict at this requested consultation time',
+                    'Patient condition requires in-person emergency hospital care',
+                    'Clinic closed / Doctor on official medical leave',
+                    'Other reason',
+                  ].map((preset) => (
+                    <label
+                      key={preset}
+                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                        selectedDeclinePreset === preset
+                          ? 'border-blue-600 bg-blue-50/60 text-blue-900 font-semibold'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="doctor_decline_preset"
+                        value={preset}
+                        checked={selectedDeclinePreset === preset}
+                        onChange={() => setSelectedDeclinePreset(preset)}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>{preset}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-            <textarea
-              id="decline-reason"
-              value={declineReason}
-              onChange={(e) => setDeclineReason(e.target.value)}
-              placeholder="e.g. Unavailable at this time due to surgery schedule..."
-              rows={4}
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 resize-none"
-            />
+              <div>
+                <label htmlFor="decline-reason" className="block text-xs font-bold text-slate-800 mb-1.5">
+                  Additional Explanation <span className="font-normal text-slate-400">(Optional)</span>
+                </label>
+                <textarea
+                  id="decline-reason"
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  placeholder="Optional note or guidance for the patient..."
+                  rows={2}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-700 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 resize-none"
+                />
+              </div>
 
-            <div className="flex gap-3 mt-5">
-              <button
-                type="button"
-                onClick={() => {
-                  setDeclineId(null)
-                  setDeclineReason('')
-                }}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors"
-              >
-                Keep Request
-              </button>
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeclineId(null)
+                    setDeclineReason('')
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
+                >
+                  Keep Request
+                </button>
 
-              <button
-                type="button"
-                onClick={handleDecline}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors shadow-sm"
-              >
-                Decline
-              </button>
+                <button
+                  type="button"
+                  onClick={handleDecline}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold transition-colors shadow-sm"
+                >
+                  Confirm Decline
+                </button>
+              </div>
             </div>
           </div>
         </div>

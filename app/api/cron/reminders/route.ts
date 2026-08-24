@@ -5,8 +5,25 @@ import { sendAppointmentReminder } from '@/lib/services/appointmentEmails'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-function formatDateTime(isoString: string): { date: string; time: string } {
+function formatDateTime(isoString: string, timeZone?: string): { date: string; time: string } {
   try {
+    const d = new Date(isoString)
+    const tz = timeZone || process.env.DEFAULT_TIMEZONE || 'Asia/Karachi'
+    return {
+      date: d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: tz,
+      }),
+      time: d.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: tz,
+      }),
+    }
+  } catch {
     const d = new Date(isoString)
     return {
       date: d.toLocaleDateString('en-US', {
@@ -20,8 +37,6 @@ function formatDateTime(isoString: string): { date: string; time: string } {
         hour12: true,
       }),
     }
-  } catch {
-    return { date: 'Scheduled Date', time: 'Scheduled Time' }
   }
 }
 

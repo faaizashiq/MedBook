@@ -24,12 +24,21 @@ function getAuthenticatedUser(req: NextRequest) {
   return verifyJWT(token)
 }
 
-// Helper: Format date/time for emails
-function formatDateTime(isoString: string) {
-  const date = new Date(isoString)
-  return {
-    date: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-    time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+// Helper: Format date/time for emails with timezone support
+function formatDateTime(isoString: string, timeZone?: string) {
+  try {
+    const date = new Date(isoString)
+    const tz = timeZone || 'Asia/Karachi'
+    return {
+      date: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: tz }),
+      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz }),
+    }
+  } catch {
+    const date = new Date(isoString)
+    return {
+      date: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    }
   }
 }
 
@@ -63,6 +72,28 @@ export async function GET(req: NextRequest) {
 
     const userId = user.sub
     const isDoctor = user.role === 'DOCTOR'
+
+    // Hybrid Approach: Auto-complete confirmed appointments whose scheduled time has passed
+    const nowIso = new Date().toISOString()
+    try {
+      if (isDoctor) {
+        await supabase
+          .from('appointments')
+          .update({ status: 'COMPLETED', updated_at: nowIso })
+          .eq('doctor_id', userId)
+          .eq('status', 'CONFIRMED')
+          .lte('scheduled_at', nowIso)
+      } else {
+        await supabase
+          .from('appointments')
+          .update({ status: 'COMPLETED', updated_at: nowIso })
+          .eq('patient_id', userId)
+          .eq('status', 'CONFIRMED')
+          .lte('scheduled_at', nowIso)
+      }
+    } catch (autoErr) {
+      console.warn('Auto-complete check warning:', autoErr)
+    }
 
     let query = supabase.from('appointments').select(
       isDoctor
@@ -144,11 +175,60 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { doctor_id, scheduled_at, type = 'Video Consultation', location } = body
+    const { doctor_id, scheduled_at, type = 'Video Consultation', location, timeZone } = body
 
     if (!doctor_id || !scheduled_at) {
       return NextResponse.json(
         { error: 'Doctor ID and scheduled date/time are required.' },
+        { status: 400 }
+      )
+    }
+
+    // 1. Restriction: A doctor cannot book an appointment with themselves, nor book as a doctor
+    if (user.role === 'DOCTOR' || user.sub === doctor_id) {
+      return NextResponse.json(
+        {
+          error:
+            user.sub === doctor_id
+              ? 'You cannot book an appointment with yourself.'
+              : 'Doctor accounts cannot book appointments. Please use a patient account to book consultations.',
+        },
+        { status: 400 }
+      )
+    }
+
+    // 2. Restriction: A patient cannot book 2 appointments at the same date & time
+    const { data: patientConflicts } = await supabase
+      .from('appointments')
+      .select('id, scheduled_at, status')
+      .eq('patient_id', user.sub)
+      .eq('scheduled_at', scheduled_at)
+      .not('status', 'in', '("CANCELLED","DECLINED")')
+      .limit(1)
+
+    if (patientConflicts && patientConflicts.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'You already have another active consultation booked at this exact time. Please choose a different time slot.',
+        },
+        { status: 400 }
+      )
+    }
+
+    // 3. Restriction: Check if the doctor is already booked for this slot
+    const { data: doctorConflicts } = await supabase
+      .from('appointments')
+      .select('id, scheduled_at, status')
+      .eq('doctor_id', doctor_id)
+      .eq('scheduled_at', scheduled_at)
+      .not('status', 'in', '("CANCELLED","DECLINED")')
+      .limit(1)
+
+    if (doctorConflicts && doctorConflicts.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'This doctor already has an appointment booked for this time slot. Please select another slot.',
+        },
         { status: 400 }
       )
     }
@@ -196,8 +276,8 @@ export async function POST(req: NextRequest) {
       .eq('id', doctor_id)
       .single()
 
-    // Send booking emails (non-blocking)
-    const formatted = formatDateTime(scheduled_at)
+    // Send booking emails (non-blocking) with accurate timezone
+    const formatted = formatDateTime(scheduled_at, timeZone)
     sendAppointmentBooked({
       patient: { email: user.email, name: user.fullName },
       doctor: { email: doctorProfile?.email || '', name: doctorProfile?.full_name || '' },

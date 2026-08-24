@@ -5,6 +5,7 @@ import { AuthProvider } from '@/lib/auth/authContext'
 import { Navbar } from '@/components/layout/Navbar'
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister'
 import { PwaInstallPrompt } from '@/components/pwa/PwaInstallPrompt'
+import { PwaUpdatePrompt } from '@/components/pwa/PwaUpdatePrompt'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -62,8 +63,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
-        <link rel="apple-touch-icon" sizes="192x192" href="/pwa/icon-192.png" />
-        <link rel="apple-touch-icon" sizes="512x512" href="/pwa/icon-512.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/pwa/icon-192.png" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/pwa/icon-512.png" />
       </head>
       <body className="min-h-screen bg-background antialiased flex flex-col">
         <AuthProvider>
@@ -73,6 +75,7 @@ export default function RootLayout({
             {children}
           </div>
           <PwaInstallPrompt />
+          <PwaUpdatePrompt />
         </AuthProvider>
       </body>
     </html>

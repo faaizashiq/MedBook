@@ -1,14 +1,24 @@
-// MedBook Service Worker v1.0.0
-const CACHE_NAME = 'medbook-pwa-v1'
+// MedBook Service Worker v3.0.0
+const CACHE_NAME = 'medbook-pwa-v3'
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/pwa/icon-192.png',
   '/pwa/icon-512.png',
+  '/pwa/icon-maskable-192.png',
+  '/pwa/icon-maskable-512.png',
+  '/pwa/apple-touch-icon.png',
   '/doctors',
   '/login',
   '/signup',
 ]
+
+// Listen for message from client to skip waiting
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
+})
 
 // Install Event — pre-cache core shell
 self.addEventListener('install', (event) => {
@@ -16,7 +26,6 @@ self.addEventListener('install', (event) => {
     caches
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
   )
 })
 

@@ -236,12 +236,100 @@ export default function DoctorDetailPage() {
           rating: 5.0,
           reviewCount: 0,
           availabilityGrid: {
-            Mon: ['09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM'],
-            Tue: ['09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM'],
-            Wed: ['09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM'],
-            Thu: ['09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM'],
-            Fri: ['09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM'],
-            Sat: ['10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM'],
+            Mon: [
+              '09:00 AM',
+              '09:30 AM',
+              '10:00 AM',
+              '10:30 AM',
+              '11:00 AM',
+              '11:30 AM',
+              '01:00 PM',
+              '01:30 PM',
+              '02:00 PM',
+              '02:30 PM',
+              '03:00 PM',
+              '03:30 PM',
+              '04:00 PM',
+              '04:30 PM',
+              '05:00 PM',
+            ],
+            Tue: [
+              '09:00 AM',
+              '09:30 AM',
+              '10:00 AM',
+              '10:30 AM',
+              '11:00 AM',
+              '11:30 AM',
+              '01:00 PM',
+              '01:30 PM',
+              '02:00 PM',
+              '02:30 PM',
+              '03:00 PM',
+              '03:30 PM',
+              '04:00 PM',
+              '04:30 PM',
+              '05:00 PM',
+            ],
+            Wed: [
+              '09:00 AM',
+              '09:30 AM',
+              '10:00 AM',
+              '10:30 AM',
+              '11:00 AM',
+              '11:30 AM',
+              '01:00 PM',
+              '01:30 PM',
+              '02:00 PM',
+              '02:30 PM',
+              '03:00 PM',
+              '03:30 PM',
+              '04:00 PM',
+              '04:30 PM',
+              '05:00 PM',
+            ],
+            Thu: [
+              '09:00 AM',
+              '09:30 AM',
+              '10:00 AM',
+              '10:30 AM',
+              '11:00 AM',
+              '11:30 AM',
+              '01:00 PM',
+              '01:30 PM',
+              '02:00 PM',
+              '02:30 PM',
+              '03:00 PM',
+              '03:30 PM',
+              '04:00 PM',
+              '04:30 PM',
+              '05:00 PM',
+            ],
+            Fri: [
+              '09:00 AM',
+              '09:30 AM',
+              '10:00 AM',
+              '10:30 AM',
+              '11:00 AM',
+              '11:30 AM',
+              '01:00 PM',
+              '01:30 PM',
+              '02:00 PM',
+              '02:30 PM',
+              '03:00 PM',
+              '03:30 PM',
+              '04:00 PM',
+              '04:30 PM',
+              '05:00 PM',
+            ],
+            Sat: [
+              '10:00 AM',
+              '10:30 AM',
+              '11:00 AM',
+              '11:30 AM',
+              '12:00 PM',
+              '12:30 PM',
+              '01:00 PM',
+            ],
           },
         })
       }
@@ -311,6 +399,17 @@ export default function DoctorDetailPage() {
       return
     }
 
+    // Role & self-booking restriction
+    const isBookingSelf = user.id === (doctor?.id || doctorId)
+    if (user.role === 'DOCTOR' || isBookingSelf) {
+      setBookingError(
+        isBookingSelf
+          ? 'You cannot book an appointment with yourself.'
+          : 'Doctor accounts cannot book patient appointments. Please use a patient account to book consultations.'
+      )
+      return
+    }
+
     setIsBooking(true)
 
     try {
@@ -324,12 +423,15 @@ export default function DoctorDetailPage() {
       const scheduledDate = new Date(targetDate)
       scheduledDate.setHours(hours, minutes, 0, 0)
 
+      const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Karachi'
+
       const appointmentRes = await createAppointment({
         doctor_id: doctor?.id || doctorId,
         scheduled_at: scheduledDate.toISOString(),
         type: consultationType,
         location: doctor?.clinicAddress || 'MedBook Medical Center',
         notes: reason,
+        timeZone: userTimeZone,
       })
 
       setBookedAppointmentInfo({
@@ -677,9 +779,12 @@ export default function DoctorDetailPage() {
 
                 {/* 3. Time Slots Grid */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-800">
-                      Available Time Slots
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span>Available Time Slots</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                        30 Min Sessions
+                      </span>
                     </span>
                     <span className="text-[11px] text-slate-500">
                       {selectedDay?.fullDay}, {selectedDay?.dateStr}
@@ -687,7 +792,7 @@ export default function DoctorDetailPage() {
                   </div>
 
                   {currentSlots.length > 0 ? (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                       {currentSlots.map((slot) => {
                         const isSlotSelected = selectedSlot === slot
                         return (
@@ -697,7 +802,7 @@ export default function DoctorDetailPage() {
                             onClick={() => setSelectedSlot(slot)}
                             className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all ${
                               isSlotSelected
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-600/20'
                                 : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-white'
                             }`}
                           >
