@@ -322,7 +322,7 @@ function AppointmentCard({
             Cancel
           </button>
 
-          {appointment.type === 'Video Consultation' && appointment.status === 'CONFIRMED' && (
+          {(appointment.type === 'Video Consultation' || appointment.type?.toLowerCase().includes('video')) && appointment.status === 'CONFIRMED' && (
             <button
               onClick={() => onJoinVideoCall?.(appointment)}
               className="ml-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 active:bg-blue-800 transition-all shadow-btn"
@@ -1246,9 +1246,13 @@ export default function PatientDashboard() {
   }
 
   const handleSaveProfile = async (newName: string, newAvatar: string) => {
-    await updatePatientProfile({ full_name: newName, avatar_url: newAvatar })
+    const res = await updatePatientProfile({ full_name: newName, avatar_url: newAvatar })
     setDisplayName(newName)
-    updateUser({ fullName: newName, avatarUrl: newAvatar })
+    if (res?.user) {
+      updateUser(res.user, res.access_token)
+    } else {
+      updateUser({ fullName: newName, avatarUrl: newAvatar }, res?.access_token)
+    }
     await refreshUser()
   }
 

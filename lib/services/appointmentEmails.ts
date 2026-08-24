@@ -24,21 +24,38 @@ export interface AppointmentEmailData {
 }
 
 //==============================================
-// Variable Helpers
+// Formatting & Variable Helpers
 //==============================================
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://med-book-app.vercel.app'
 
+function formatDoctorName(name: string): string {
+  const clean = (name || 'Doctor').trim()
+  if (clean.toLowerCase().startsWith('dr.') || clean.toLowerCase().startsWith('dr ')) {
+    return clean
+  }
+  return `Dr. ${clean}`
+}
+
+function formatPatientName(name: string): string {
+  const clean = (name || 'Patient').trim()
+  return clean || 'Patient'
+}
+
 function getPatientVars(data: AppointmentEmailData): Record<string, string> {
   const { patient, doctor, appointment } = data
+  const patientName = formatPatientName(patient.name)
+  const doctorDisplayName = formatDoctorName(doctor.name || appointment.doctorName)
+
   return {
-    patient_name: patient.name,
-    doctor_name: doctor.name,
+    patient_name: patientName,
+    doctor_name: doctorDisplayName,
+    doctor_display_name: doctorDisplayName,
     appointment_date: appointment.date,
     appointment_time: appointment.time,
     clinic_address: appointment.clinicAddress || 'MedBook Medical Center',
     consultation_type: appointment.consultationType || 'Video Consultation',
-    recipient_name: patient.name,
+    recipient_name: patientName,
     dashboard_url: `${appUrl}/patient`,
     browse_doctors_url: `${appUrl}/doctors`,
     current_year: new Date().getFullYear().toString(),
@@ -47,14 +64,18 @@ function getPatientVars(data: AppointmentEmailData): Record<string, string> {
 
 function getDoctorVars(data: AppointmentEmailData): Record<string, string> {
   const { patient, doctor, appointment } = data
+  const patientName = formatPatientName(patient.name)
+  const doctorDisplayName = formatDoctorName(doctor.name || appointment.doctorName)
+
   return {
-    patient_name: patient.name,
-    doctor_name: doctor.name,
+    patient_name: patientName,
+    doctor_name: doctorDisplayName,
+    doctor_display_name: doctorDisplayName,
     appointment_date: appointment.date,
     appointment_time: appointment.time,
     clinic_address: appointment.clinicAddress || 'MedBook Medical Center',
     consultation_type: appointment.consultationType || 'Video Consultation',
-    recipient_name: `Dr. ${doctor.name}`,
+    recipient_name: doctorDisplayName,
     dashboard_url: `${appUrl}/doctor`,
     browse_doctors_url: `${appUrl}/doctors`,
     current_year: new Date().getFullYear().toString(),
@@ -67,18 +88,21 @@ function getDoctorVars(data: AppointmentEmailData): Record<string, string> {
 // ============================================================
 
 export async function sendAppointmentBooked(data: AppointmentEmailData): Promise<void> {
+  const doctorDisplayName = formatDoctorName(data.doctor.name || data.appointment.doctorName)
+  const patientName = formatPatientName(data.patient.name)
+
   await Promise.all([
     // Patient Confirmation
     sendEmail({
       to: data.patient.email,
-      subject: `[MedBook] Appointment Request Submitted — Dr. ${data.appointment.doctorName}`,
+      subject: `[MedBook] Appointment Request Submitted — ${doctorDisplayName}`,
       templateName: 'booked',
       variables: getPatientVars(data),
     }),
-    // Doctor Notification (with dedicated doctor action card)
+    // Doctor Notification
     sendEmail({
       to: data.doctor.email,
-      subject: `[MedBook] New Appointment Request from ${data.patient.name} (Action Required)`,
+      subject: `[MedBook] New Appointment Request from ${patientName} (Action Required)`,
       templateName: 'doctor_new_request',
       variables: getDoctorVars(data),
     }),
@@ -91,9 +115,11 @@ export async function sendAppointmentBooked(data: AppointmentEmailData): Promise
 // ============================================================
 
 export async function sendAppointmentConfirmed(data: AppointmentEmailData): Promise<void> {
+  const doctorDisplayName = formatDoctorName(data.doctor.name || data.appointment.doctorName)
+
   await sendEmail({
     to: data.patient.email,
-    subject: `[MedBook] Confirmed: Appointment with Dr. ${data.appointment.doctorName}`,
+    subject: `[MedBook] Confirmed: Appointment with ${doctorDisplayName}`,
     templateName: 'confirmed',
     variables: getPatientVars(data),
   })
@@ -101,13 +127,15 @@ export async function sendAppointmentConfirmed(data: AppointmentEmailData): Prom
 
 // ============================================================
 // 3. Doctor Declines an Appointment
-// -> Notification to Patient with Optional Reason
+// -> Notification to Patient with Reason
 // ============================================================
 
 export async function sendAppointmentDeclined(data: AppointmentEmailData): Promise<void> {
+  const doctorDisplayName = formatDoctorName(data.doctor.name || data.appointment.doctorName)
+
   await sendEmail({
     to: data.patient.email,
-    subject: `[MedBook] Appointment Request Declined — Dr. ${data.appointment.doctorName}`,
+    subject: `[MedBook] Appointment Request Declined — ${doctorDisplayName}`,
     templateName: 'declined',
     variables: {
       ...getPatientVars(data),
@@ -118,22 +146,23 @@ export async function sendAppointmentDeclined(data: AppointmentEmailData): Promi
 
 // ============================================================
 // 4. Patient / Doctor Cancels an Appointment
-// -> Cancellation notice to Patient, Notification to Doctor
+// -> Distinct Cancellation notice to Patient and to Doctor
 // ============================================================
 
 export async function sendAppointmentCancelled(data: AppointmentEmailData): Promise<void> {
   const cancelledBy = data.appointment.cancelledBy || 'Patient'
   const reason = data.appointment.cancellationReason || 'No reason provided'
+  const doctorDisplayName = formatDoctorName(data.doctor.name || data.appointment.doctorName)
+  const patientName = formatPatientName(data.patient.name)
 
   await Promise.all([
     // Patient Notice
     sendEmail({
       to: data.patient.email,
-      subject: `[MedBook] Appointment Cancelled — Dr. ${data.appointment.doctorName}`,
-      templateName: 'cancelled',
+      subject: `[MedBook] Appointment Cancelled — ${doctorDisplayName}`,
+      templateName: 'cancelled_patient',
       variables: {
         ...getPatientVars(data),
-        recipient_name: data.patient.name,
         cancelled_by: cancelledBy,
         cancellation_reason: reason,
       },
@@ -141,11 +170,10 @@ export async function sendAppointmentCancelled(data: AppointmentEmailData): Prom
     // Doctor Notice
     sendEmail({
       to: data.doctor.email,
-      subject: `[MedBook] Appointment Cancelled by ${cancelledBy} — ${data.patient.name}`,
-      templateName: 'cancelled',
+      subject: `[MedBook] Appointment Cancelled by ${cancelledBy} — ${patientName}`,
+      templateName: 'cancelled_doctor',
       variables: {
         ...getDoctorVars(data),
-        recipient_name: `Dr. ${data.doctor.name}`,
         cancelled_by: cancelledBy,
         cancellation_reason: reason,
       },
@@ -155,7 +183,7 @@ export async function sendAppointmentCancelled(data: AppointmentEmailData): Prom
 
 // ============================================================
 // 5. Patient / Doctor Reschedules an Appointment
-// -> Updated Details to Both Parties
+// -> Distinct Updated Details to Both Parties
 // ============================================================
 
 export async function sendAppointmentRescheduled(data: AppointmentEmailData): Promise<void> {
@@ -163,6 +191,8 @@ export async function sendAppointmentRescheduled(data: AppointmentEmailData): Pr
   const reason = data.appointment.rescheduleReason || 'Schedule adjustment'
   const oldDate = data.appointment.oldDate || 'Original date'
   const oldTime = data.appointment.oldTime || 'Original time'
+  const doctorDisplayName = formatDoctorName(data.doctor.name || data.appointment.doctorName)
+  const patientName = formatPatientName(data.patient.name)
 
   const baseVars = {
     new_appointment_date: data.appointment.date,
@@ -177,23 +207,21 @@ export async function sendAppointmentRescheduled(data: AppointmentEmailData): Pr
     // Patient Email
     sendEmail({
       to: data.patient.email,
-      subject: `[MedBook] Appointment Rescheduled — Dr. ${data.appointment.doctorName}`,
-      templateName: 'rescheduled',
+      subject: `[MedBook] Appointment Rescheduled — ${doctorDisplayName}`,
+      templateName: 'rescheduled_patient',
       variables: {
         ...getPatientVars(data),
         ...baseVars,
-        recipient_name: data.patient.name,
       },
     }),
     // Doctor Email
     sendEmail({
       to: data.doctor.email,
-      subject: `[MedBook] Appointment Rescheduled by ${rescheduledBy} — ${data.patient.name}`,
-      templateName: 'rescheduled',
+      subject: `[MedBook] Appointment Rescheduled by ${rescheduledBy} — ${patientName}`,
+      templateName: 'rescheduled_doctor',
       variables: {
         ...getDoctorVars(data),
         ...baseVars,
-        recipient_name: `Dr. ${data.doctor.name}`,
       },
     }),
   ])
@@ -201,27 +229,27 @@ export async function sendAppointmentRescheduled(data: AppointmentEmailData): Pr
 
 // ============================================================
 // 6. Automated Visit Reminder (1 Hour Before)
+// -> Distinct Reminders for Patient and Doctor
 // ============================================================
 
 export async function sendAppointmentReminder(data: AppointmentEmailData): Promise<void> {
+  const doctorDisplayName = formatDoctorName(data.doctor.name || data.appointment.doctorName)
+  const patientName = formatPatientName(data.patient.name)
+
   await Promise.all([
+    // Patient Reminder
     sendEmail({
       to: data.patient.email,
-      subject: `[MedBook] Reminder: Appointment in 1 hour with Dr. ${data.appointment.doctorName}`,
-      templateName: 'reminder',
-      variables: {
-        ...getPatientVars(data),
-        recipient_name: data.patient.name,
-      },
+      subject: `[MedBook] Reminder: Appointment in 1 hour with ${doctorDisplayName}`,
+      templateName: 'reminder_patient',
+      variables: getPatientVars(data),
     }),
+    // Doctor Reminder
     sendEmail({
       to: data.doctor.email,
-      subject: `[MedBook] Reminder: Upcoming Appointment in 1 hour with ${data.patient.name}`,
-      templateName: 'reminder',
-      variables: {
-        ...getDoctorVars(data),
-        recipient_name: `Dr. ${data.doctor.name}`,
-      },
+      subject: `[MedBook] Reminder: Consultation in 1 hour with ${patientName}`,
+      templateName: 'reminder_doctor',
+      variables: getDoctorVars(data),
     }),
   ])
 }

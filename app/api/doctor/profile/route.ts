@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database/db'
 import { supabaseAdmin as supabase } from '@/lib/database/supabase'
-import { verifyJWT } from '@/lib/auth/jwt'
+import { verifyJWT, signJWT } from '@/lib/auth/jwt'
 
 function getAuthenticatedUser(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -97,10 +97,19 @@ export async function POST(req: NextRequest) {
     })
 
     const updatedUser = await db.findUserById(payload.sub)
+    const freshToken = updatedUser
+      ? signJWT({
+          sub: updatedUser.id,
+          email: updatedUser.email,
+          role: updatedUser.role,
+          fullName: updatedUser.full_name,
+        })
+      : null
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: 'Doctor profile completed successfully.',
       profile: updated,
+      access_token: freshToken,
       user: updatedUser
         ? {
             id: updatedUser.id,
@@ -111,6 +120,18 @@ export async function POST(req: NextRequest) {
           }
         : null,
     })
+
+    if (freshToken) {
+      response.cookies.set('medbook_token', freshToken, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60,
+        path: '/',
+      })
+    }
+
+    return response
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
@@ -161,10 +182,19 @@ export async function PATCH(req: NextRequest) {
     }
 
     const updatedUser = await db.findUserById(payload.sub)
+    const freshToken = updatedUser
+      ? signJWT({
+          sub: updatedUser.id,
+          email: updatedUser.email,
+          role: updatedUser.role,
+          fullName: updatedUser.full_name,
+        })
+      : null
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: 'Doctor profile updated successfully.',
       profile: updatedDocProfile,
+      access_token: freshToken,
       user: updatedUser
         ? {
             id: updatedUser.id,
@@ -175,6 +205,18 @@ export async function PATCH(req: NextRequest) {
           }
         : null,
     })
+
+    if (freshToken) {
+      response.cookies.set('medbook_token', freshToken, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60,
+        path: '/',
+      })
+    }
+
+    return response
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

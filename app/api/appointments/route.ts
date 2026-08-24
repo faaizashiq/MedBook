@@ -269,22 +269,34 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Fetch doctor profile for email notification
-    const { data: doctorProfile } = await supabase
-      .from('profiles')
-      .select('email, full_name, doctor_profiles(clinic_address)')
-      .eq('id', doctor_id)
-      .single()
+    // Fetch live doctor and patient profile from database for accurate current names
+    const [{ data: doctorProfile }, { data: patientProfile }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('email, full_name, doctor_profiles(clinic_address)')
+        .eq('id', doctor_id)
+        .single(),
+      supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', user.sub)
+        .single(),
+    ])
+
+    const patientName = patientProfile?.full_name || user.fullName || 'Patient'
+    const patientEmail = patientProfile?.email || user.email
+    const doctorName = doctorProfile?.full_name || 'Doctor'
+    const doctorEmail = doctorProfile?.email || ''
 
     // Send booking emails (non-blocking) with accurate timezone
     const formatted = formatDateTime(scheduled_at, timeZone)
     sendAppointmentBooked({
-      patient: { email: user.email, name: user.fullName },
-      doctor: { email: doctorProfile?.email || '', name: doctorProfile?.full_name || '' },
+      patient: { email: patientEmail, name: patientName },
+      doctor: { email: doctorEmail, name: doctorName },
       appointment: {
         date: formatted.date,
         time: formatted.time,
-        doctorName: doctorProfile?.full_name || 'Doctor',
+        doctorName: doctorName,
         clinicAddress: doctorProfile?.doctor_profiles?.[0]?.clinic_address || location || 'MedBook Medical Center',
         consultationType: type,
       }

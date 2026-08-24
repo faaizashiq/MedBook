@@ -235,7 +235,7 @@ function AppointmentCard({
                 Confirmed
               </span>
 
-              {appointment.type === 'Video Consultation' && (
+              {(appointment.type === 'Video Consultation' || appointment.type?.toLowerCase().includes('video')) && (
                 <button
                   type="button"
                   onClick={onJoinVideoCall}
@@ -670,7 +670,7 @@ export default function DoctorDashboard() {
   }
 
   const handleSaveProfile = async (newName: string, newAvatar: string) => {
-    await apiFetch('/api/doctor/profile', {
+    const res = await apiFetch<{ user?: any; access_token?: string }>('/api/doctor/profile', {
       method: 'PATCH',
       body: JSON.stringify({
         full_name: newName,
@@ -678,7 +678,11 @@ export default function DoctorDashboard() {
       }),
     })
 
-    updateUser({ fullName: newName, avatarUrl: newAvatar })
+    if (res?.user) {
+      updateUser(res.user, res.access_token)
+    } else {
+      updateUser({ fullName: newName, avatarUrl: newAvatar }, res?.access_token)
+    }
     await refreshUser()
   }
 

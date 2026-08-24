@@ -23,7 +23,7 @@ interface AuthContextType {
   signup: (data: SignupData) => Promise<AuthResponse>
   logout: () => void
   refreshUser: () => Promise<void>
-  updateUser: (partial: Partial<AuthUser>) => void
+  updateUser: (partial: Partial<AuthUser>, newToken?: string) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -106,13 +106,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await rehydrate()
   }
 
-  const updateUser = (partial: Partial<AuthUser>) => {
+  const updateUser = (partial: Partial<AuthUser>, newToken?: string) => {
+    if (newToken) {
+      setToken(newToken)
+      localStorage.setItem('medbook_token', newToken)
+    }
     setUser((prev) => {
       if (!prev) return null
       const updated = { ...prev, ...partial }
       localStorage.setItem('medbook_user', JSON.stringify(updated))
       return updated
     })
+
+    try {
+      window.dispatchEvent(new CustomEvent('medbook:sync'))
+      localStorage.setItem('medbook_sync_ping', Date.now().toString())
+    } catch {}
   }
 
   return (

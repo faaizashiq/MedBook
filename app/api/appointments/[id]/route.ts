@@ -94,7 +94,11 @@ export async function PATCH(
 
     const previousScheduledAt = currentAppt.scheduled_at
     const isDoctor = user.role === 'DOCTOR'
-    const userName = user.fullName || (isDoctor ? 'Doctor' : 'Patient')
+    const patientData = currentAppt.patient as any
+    const doctorData = currentAppt.doctor as any
+    const userName = isDoctor
+      ? (doctorData?.full_name || user.fullName || 'Doctor')
+      : (patientData?.full_name || user.fullName || 'Patient')
 
     if (action === 'CANCEL' || status === 'CANCELLED') {
       updates.status = 'CANCELLED'
@@ -138,8 +142,6 @@ export async function PATCH(
     }
 
     // 2. Trigger Emails Asynchronously
-    const patientData = currentAppt.patient as any
-    const doctorData = currentAppt.doctor as any
     const formattedNew = formatDateTime(updates.scheduled_at || currentAppt.scheduled_at)
     const formattedOld = formatDateTime(previousScheduledAt)
 

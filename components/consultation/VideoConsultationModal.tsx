@@ -142,11 +142,18 @@ export default function VideoConsultationModal({
           const api = new window.JitsiMeetExternalAPI(domain, options)
           apiRef.current = api
 
-          api.addEventListener('videoConferenceJoined', () => {
+          const clearLoading = () => {
             if (isMounted) setLoading(false)
-          })
+          }
+
+          api.addEventListener('videoConferenceJoined', clearLoading)
+          api.addEventListener('participantJoined', clearLoading)
+          
+          // Safety timeout to ensure user can interact with camera/mic permission prompts
+          const safetyTimer = setTimeout(clearLoading, 2000)
 
           api.addEventListener('readyToClose', () => {
+            clearTimeout(safetyTimer)
             if (onCallEnd) onCallEnd()
             onClose()
           })

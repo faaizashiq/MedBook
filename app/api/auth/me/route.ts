@@ -7,14 +7,19 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    let token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null
+
+    if (!token) {
+      token = req.cookies.get('medbook_token')?.value || null
+    }
+
+    if (!token) {
       return NextResponse.json(
-        { error: 'Missing or malformed Authorization header.' },
+        { error: 'Missing or malformed Authorization header or token cookie.' },
         { status: 401 }
       )
     }
 
-    const token = authHeader.substring(7)
     const payload = verifyJWT(token)
 
     if (!payload || !payload.sub) {

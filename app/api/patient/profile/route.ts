@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/database/supabase'
-import { verifyJWT } from '@/lib/auth/jwt'
+import { verifyJWT, signJWT } from '@/lib/auth/jwt'
 
 function getAuthenticatedUser(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -66,10 +66,39 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({
+    // Re-issue a fresh JWT token with the newly updated name
+    const freshToken = signJWT({
+      sub: data.id,
+      email: data.email,
+      role: data.role,
+      fullName: data.full_name,
+    })
+
+    const userObj = {
+      id: data.id,
+      fullName: data.full_name,
+      email: data.email,
+      avatarUrl: data.avatar_url,
+      role: data.role,
+    }
+
+    const response = NextResponse.json({
       message: 'Profile updated successfully.',
       profile: data,
+      access_token: freshToken,
+      user: userObj,
     })
+
+    // Set updated token cookie
+    response.cookies.set('medbook_token', freshToken, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60,
+      path: '/',
+    })
+
+    return response
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Internal server error.' }, { status: 500 })
   }

@@ -1,4 +1,5 @@
 import { apiFetch } from './client'
+import { AuthUser } from './auth'
 
 export interface PatientProfileData {
   id: string
@@ -16,7 +17,7 @@ export async function getPatientProfile(): Promise<{ profile: PatientProfileData
 export async function updatePatientProfile(data: {
   full_name?: string
   avatar_url?: string
-}): Promise<{ profile: PatientProfileData; message: string }> {
+}): Promise<{ profile: PatientProfileData; message: string; access_token?: string; user?: AuthUser }> {
   return apiFetch('/api/patient/profile', {
     method: 'PATCH',
     body: JSON.stringify(data),

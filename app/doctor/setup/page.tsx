@@ -369,7 +369,7 @@ function DoctorSetupContent() {
     setLoading(true)
 
     try {
-      await apiFetch('/api/doctor/profile', {
+      const res = await apiFetch<{ user?: any; access_token?: string }>('/api/doctor/profile', {
         method: 'POST',
         body: JSON.stringify({
           full_name: fullName.trim(),
@@ -385,7 +385,11 @@ function DoctorSetupContent() {
 
       // Update local storage and context
       localStorage.setItem('medbook_doctor_setup_completed', 'true')
-      updateUser({ fullName: fullName.trim(), avatarUrl: avatar })
+      if (res?.user) {
+        updateUser(res.user, res.access_token)
+      } else {
+        updateUser({ fullName: fullName.trim(), avatarUrl: avatar }, res?.access_token)
+      }
       await refreshUser()
 
       setSavedSuccess(true)
