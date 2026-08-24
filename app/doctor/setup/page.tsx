@@ -151,7 +151,7 @@ function DoctorSetupContent() {
   const searchParams = useSearchParams()
   const tabParam = searchParams?.get('tab')
 
-  const { user, refreshUser, updateUser } = useAuth()
+  const { user, refreshUser, updateUser, setDoctorSetupCompleted } = useAuth()
 
   // Initial step based on query param: ?tab=profile (1), ?tab=fee (2), ?tab=schedule (3)
   const initialStep: 1 | 2 | 3 =
@@ -383,7 +383,8 @@ function DoctorSetupContent() {
         }),
       })
 
-      // Update local storage and context
+      // Update local storage and context synchronously
+      setDoctorSetupCompleted(true)
       localStorage.setItem('medbook_doctor_setup_completed', 'true')
       if (res?.user) {
         updateUser(res.user, res.access_token)

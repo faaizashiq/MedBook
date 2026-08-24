@@ -39,6 +39,10 @@ export async function signupUser(data: SignupData): Promise<AuthResponse> {
     localStorage.setItem('medbook_token', res.access_token)
     localStorage.setItem('medbook_user', JSON.stringify(res.user))
     localStorage.setItem(
+      'medbook_doctor_setup_completed',
+      String(res.is_doctor_setup_completed ?? (res.user.role === 'PATIENT' ? true : false))
+    )
+    localStorage.setItem(
       'medbook_auth',
       JSON.stringify({
         loggedIn: true,
@@ -62,6 +66,10 @@ export async function loginUser(data: LoginData): Promise<AuthResponse> {
   if (typeof window !== 'undefined' && res.access_token) {
     localStorage.setItem('medbook_token', res.access_token)
     localStorage.setItem('medbook_user', JSON.stringify(res.user))
+    localStorage.setItem(
+      'medbook_doctor_setup_completed',
+      String(res.is_doctor_setup_completed ?? (res.user.role === 'PATIENT' ? true : false))
+    )
     localStorage.setItem(
       'medbook_auth',
       JSON.stringify({

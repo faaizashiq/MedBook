@@ -24,6 +24,7 @@ interface AuthContextType {
   logout: () => void
   refreshUser: () => Promise<void>
   updateUser: (partial: Partial<AuthUser>, newToken?: string) => void
+  setDoctorSetupCompleted: (completed: boolean) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -31,37 +32,47 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [token, setToken] = useState<string | null>(null)
-  const [isDoctorSetupCompleted, setIsDoctorSetupCompleted] = useState(true)
+  const [isDoctorSetupCompleted, setIsDoctorSetupCompleted] = useState<boolean>(true)
   const [loading, setLoading] = useState(true)
 
-  // Instant rehydration from localStorage first (0ms initial render), followed by non-blocking live API verification
+  // Instant rehydration from localStorage first (0ms initial render), followed by live API verification
   const rehydrate = async () => {
     try {
       const storedToken = localStorage.getItem('medbook_token')
       const storedUser = localStorage.getItem('medbook_user')
+      const storedSetup = localStorage.getItem('medbook_doctor_setup_completed')
+
+      if (storedSetup !== null) {
+        setIsDoctorSetupCompleted(storedSetup === 'true')
+      }
 
       if (storedToken) {
         setToken(storedToken)
         if (storedUser) {
           try {
-            setUser(JSON.parse(storedUser))
+            const parsed = JSON.parse(storedUser)
+            setUser(parsed)
+            if (parsed.role === 'PATIENT') {
+              setIsDoctorSetupCompleted(true)
+            }
           } catch {}
         }
         // Unlock page immediately for 0ms visual loading
         setLoading(false)
 
-        // Verify/refresh user in background without blocking UI
-        getCurrentUser()
-          .then((me) => {
-            if (me?.user) {
-              setUser(me.user)
-              localStorage.setItem('medbook_user', JSON.stringify(me.user))
-              setIsDoctorSetupCompleted(me.is_doctor_setup_completed)
-            }
-          })
-          .catch((err) => {
-            console.warn('Session verification warning:', err)
-          })
+        // Verify/refresh user
+        try {
+          const me = await getCurrentUser()
+          if (me?.user) {
+            setUser(me.user)
+            localStorage.setItem('medbook_user', JSON.stringify(me.user))
+            const setupDone = me.user.role === 'PATIENT' ? true : !!me.is_doctor_setup_completed
+            setIsDoctorSetupCompleted(setupDone)
+            localStorage.setItem('medbook_doctor_setup_completed', String(setupDone))
+          }
+        } catch (err) {
+          console.warn('Session verification warning:', err)
+        }
       } else {
         setLoading(false)
       }
@@ -82,7 +93,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await loginUser(data)
     setUser(res.user)
     setToken(res.access_token)
-    setIsDoctorSetupCompleted(res.is_doctor_setup_completed)
+    const setupDone = res.user.role === 'PATIENT' ? true : !!res.is_doctor_setup_completed
+    setIsDoctorSetupCompleted(setupDone)
+    localStorage.setItem('medbook_doctor_setup_completed', String(setupDone))
     return res
   }
 
@@ -90,7 +103,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await signupUser(data)
     setUser(res.user)
     setToken(res.access_token)
-    setIsDoctorSetupCompleted(res.is_doctor_setup_completed)
+    const setupDone = res.user.role === 'PATIENT' ? true : !!res.is_doctor_setup_completed
+    setIsDoctorSetupCompleted(setupDone)
+    localStorage.setItem('medbook_doctor_setup_completed', String(setupDone))
     return res
   }
 
@@ -99,7 +114,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
     setToken(null)
     setIsDoctorSetupCompleted(true)
+    localStorage.removeItem('medbook_doctor_setup_completed')
     window.location.href = '/'
+  }
+
+  const setDoctorSetupCompleted = (completed: boolean) => {
+    setIsDoctorSetupCompleted(completed)
+    localStorage.setItem('medbook_doctor_setup_completed', String(completed))
   }
 
   const refreshUser = async () => {
@@ -147,6 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         refreshUser,
         updateUser,
+        setDoctorSetupCompleted,
       }}
     >
       {children}

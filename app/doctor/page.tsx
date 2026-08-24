@@ -459,7 +459,8 @@ export default function DoctorDashboard() {
 
   // Redirect if doctor profile setup is incomplete
   useEffect(() => {
-    if (!authLoading && user && user.role === 'DOCTOR' && !isDoctorSetupCompleted) {
+    const isSetupSaved = typeof window !== 'undefined' && localStorage.getItem('medbook_doctor_setup_completed') === 'true'
+    if (!authLoading && user && user.role === 'DOCTOR' && !isDoctorSetupCompleted && !isSetupSaved) {
       router.push('/doctor/setup')
     }
   }, [authLoading, user, isDoctorSetupCompleted, router])
