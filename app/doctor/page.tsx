@@ -457,13 +457,13 @@ export default function DoctorDashboard() {
     }
   }, [authLoading, user, router])
 
-  // Redirect if doctor profile setup is incomplete
+  // If doctor arrives on dashboard, ensure session is valid
   useEffect(() => {
-    const isSetupSaved = typeof window !== 'undefined' && localStorage.getItem('medbook_doctor_setup_completed') === 'true'
-    if (!authLoading && user && user.role === 'DOCTOR' && !isDoctorSetupCompleted && !isSetupSaved) {
-      router.push('/doctor/setup')
+    // Keep doctor setup completed in sync
+    if (user?.role === 'DOCTOR' && isDoctorSetupCompleted) {
+      localStorage.setItem('medbook_doctor_setup_completed', 'true')
     }
-  }, [authLoading, user, isDoctorSetupCompleted, router])
+  }, [user, isDoctorSetupCompleted])
 
   // Close profile dropdown on outside click
   useEffect(() => {

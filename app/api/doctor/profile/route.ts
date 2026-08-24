@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
       message: 'Doctor profile completed successfully.',
       profile: updated,
       access_token: freshToken,
+      is_doctor_setup_completed: true,
       user: updatedUser
         ? {
             id: updatedUser.id,
@@ -123,6 +124,13 @@ export async function POST(req: NextRequest) {
 
     if (freshToken) {
       response.cookies.set('medbook_token', freshToken, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60,
+        path: '/',
+      })
+      response.cookies.set('medbook_role', 'doctor', {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

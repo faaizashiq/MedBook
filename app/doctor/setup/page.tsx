@@ -394,7 +394,7 @@ function DoctorSetupContent() {
       await refreshUser()
 
       setSavedSuccess(true)
-      router.push('/doctor')
+      window.location.href = '/doctor'
     } catch (err: any) {
       setError(err?.message || 'Failed to save profile. Please check your inputs.')
     } finally {
