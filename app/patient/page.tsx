@@ -1127,8 +1127,8 @@ export default function PatientDashboard() {
           const mapped: PatientAppointment[] = res.appointments.map((item: ApiAppointment) => {
             const { date, time } = parseDateAndTime(item.scheduled_at)
             const isReviewed = typeof window !== 'undefined' && localStorage.getItem(`medbook_reviewed_${item.id}`) === 'true'
-            const isTimePassed = item.scheduled_at ? new Date(item.scheduled_at).getTime() <= Date.now() : false
-            const isCompleted = item.status === 'COMPLETED' || (item.status === 'CONFIRMED' && isTimePassed)
+            const isSessionConcluded = item.scheduled_at ? new Date(item.scheduled_at).getTime() + 30 * 60 * 1000 <= Date.now() : false
+            const isCompleted = item.status === 'COMPLETED' || (item.status === 'CONFIRMED' && isSessionConcluded)
             return {
               id: item.id,
               doctorId: item.doctor?.id || '1',

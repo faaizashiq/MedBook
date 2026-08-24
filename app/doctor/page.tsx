@@ -487,9 +487,9 @@ export default function DoctorDashboard() {
         if (res?.appointments) {
           const mapped: DoctorAppointment[] = res.appointments.map((item: ApiAppointment) => {
             const { date, time } = parseDateAndTime(item.scheduled_at)
-            const isTimePassed = item.scheduled_at ? new Date(item.scheduled_at).getTime() <= Date.now() : false
+            const isSessionConcluded = item.scheduled_at ? new Date(item.scheduled_at).getTime() + 30 * 60 * 1000 <= Date.now() : false
             const effectiveStatus: AppointmentStatus =
-              item.status === 'CONFIRMED' && isTimePassed ? 'COMPLETED' : item.status
+              item.status === 'CONFIRMED' && isSessionConcluded ? 'COMPLETED' : item.status
 
             return {
               id: item.id,

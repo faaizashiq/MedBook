@@ -73,8 +73,9 @@ export async function GET(req: NextRequest) {
     const userId = user.sub
     const isDoctor = user.role === 'DOCTOR'
 
-    // Hybrid Approach: Auto-complete confirmed appointments whose scheduled time has passed
+    // Hybrid Approach: Auto-complete confirmed appointments ONLY after the 30-minute consultation window has passed
     const nowIso = new Date().toISOString()
+    const thirtyMinsAgoIso = new Date(Date.now() - 30 * 60 * 1000).toISOString()
     try {
       if (isDoctor) {
         await supabase
@@ -82,14 +83,14 @@ export async function GET(req: NextRequest) {
           .update({ status: 'COMPLETED', updated_at: nowIso })
           .eq('doctor_id', userId)
           .eq('status', 'CONFIRMED')
-          .lte('scheduled_at', nowIso)
+          .lte('scheduled_at', thirtyMinsAgoIso)
       } else {
         await supabase
           .from('appointments')
           .update({ status: 'COMPLETED', updated_at: nowIso })
           .eq('patient_id', userId)
           .eq('status', 'CONFIRMED')
-          .lte('scheduled_at', nowIso)
+          .lte('scheduled_at', thirtyMinsAgoIso)
       }
     } catch (autoErr) {
       console.warn('Auto-complete check warning:', autoErr)
