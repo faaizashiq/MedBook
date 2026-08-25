@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
     // 2. Generate secure 6-digit numeric OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
 
-    // 3. Save OTP in store (10 minute expiry)
-    await otpStore.saveOtp(cleanEmail, otpCode, { name: cleanName })
+    // 3. Save OTP in store & generate stateless cryptographic token
+    const otpToken = await otpStore.saveOtp(cleanEmail, otpCode, { name: cleanName })
 
     // 4. Send beautiful verification email
     const emailSent = await sendOtpVerificationEmail({
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      otp_token: otpToken,
       message: `A 6-digit verification code was sent to ${cleanEmail}.`,
     })
   } catch (error: any) {

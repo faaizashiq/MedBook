@@ -182,6 +182,7 @@ export default function SignupPage() {
 
   // 6-digit OTP state
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', ''])
+  const [otpToken, setOtpToken] = useState<string>('')
   const [resendCooldown, setResendCooldown] = useState(60)
   const [errors, setErrors] = useState<Partial<FormData & { general: string; otp: string }>>({})
   const [loading, setLoading] = useState(false)
@@ -238,10 +239,14 @@ export default function SignupPage() {
     setErrors({})
 
     try {
-      await sendOtpApi({
+      const res = await sendOtpApi({
         email: form.email.trim(),
         name: form.name.trim(),
       })
+
+      if (res.otp_token) {
+        setOtpToken(res.otp_token)
+      }
 
       setStep('OTP')
       setResendCooldown(60)
@@ -307,6 +312,7 @@ export default function SignupPage() {
       const response = await verifyOtpApi({
         email: form.email.trim(),
         otp_code: fullOtp,
+        otp_token: otpToken,
         password: form.password,
         full_name: form.name.trim(),
         role: role.toUpperCase() as 'PATIENT' | 'DOCTOR',
@@ -333,10 +339,13 @@ export default function SignupPage() {
     setErrors({})
 
     try {
-      await sendOtpApi({
+      const res = await sendOtpApi({
         email: form.email.trim(),
         name: form.name.trim(),
       })
+      if (res.otp_token) {
+        setOtpToken(res.otp_token)
+      }
       setResendCooldown(60)
       setOtpDigits(['', '', '', '', '', ''])
       otpInputsRef.current[0]?.focus()

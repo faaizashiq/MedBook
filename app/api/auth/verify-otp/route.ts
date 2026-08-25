@@ -7,7 +7,7 @@ import { signJWT } from '@/lib/auth/jwt'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { email, otp_code, password, full_name, role } = body
+    const { email, otp_code, otp_token, password, full_name, role } = body
 
     const cleanEmail = email?.toLowerCase().trim()
     const cleanOtp = otp_code?.trim()
@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
 
     const assignedRole = (role?.toUpperCase() || 'PATIENT') as 'PATIENT' | 'DOCTOR'
 
-    // 1. Verify 6-digit OTP code
-    const verification = await otpStore.verifyOtp(cleanEmail, cleanOtp)
+    // 1. Verify 6-digit OTP code with stateless token fallback
+    const verification = await otpStore.verifyOtp(cleanEmail, cleanOtp, otp_token)
     if (!verification.valid) {
       return NextResponse.json(
         { error: verification.error || 'Invalid or expired verification code.' },

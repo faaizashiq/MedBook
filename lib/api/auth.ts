@@ -58,16 +58,23 @@ export async function signupUser(data: SignupData): Promise<AuthResponse> {
   return res
 }
 
-export async function sendOtpApi(data: { email: string; name?: string }): Promise<{ success: boolean; message: string }> {
-  return await apiFetch<{ success: boolean; message: string }>('/api/auth/send-otp', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
+export async function sendOtpApi(data: {
+  email: string
+  name?: string
+}): Promise<{ success: boolean; message: string; otp_token?: string }> {
+  return await apiFetch<{ success: boolean; message: string; otp_token?: string }>(
+    '/api/auth/send-otp',
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  )
 }
 
 export async function verifyOtpApi(data: {
   email: string
   otp_code: string
+  otp_token?: string
   password: string
   full_name: string
   role: 'PATIENT' | 'DOCTOR'
