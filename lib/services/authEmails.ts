@@ -60,3 +60,29 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<void> {
     },
   })
 }
+
+/**
+ * Sends OTP Email Verification using verify_otp.html template
+ */
+export interface OtpVerificationEmailData {
+  email: string
+  name: string
+  otpCode: string
+  expiryMinutes?: number
+}
+
+export async function sendOtpVerificationEmail(data: OtpVerificationEmailData): Promise<boolean> {
+  const { email, name, otpCode, expiryMinutes = 10 } = data
+
+  return await sendEmail({
+    to: email,
+    subject: `${otpCode} is your MedBook verification code`,
+    templateName: 'verify_otp',
+    variables: {
+      recipient_name: name,
+      otp_code: otpCode,
+      otp_expiry: `${expiryMinutes} minutes`,
+      current_year: new Date().getFullYear().toString(),
+    },
+  })
+}

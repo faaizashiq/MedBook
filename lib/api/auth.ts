@@ -58,6 +58,48 @@ export async function signupUser(data: SignupData): Promise<AuthResponse> {
   return res
 }
 
+export async function sendOtpApi(data: { email: string; name?: string }): Promise<{ success: boolean; message: string }> {
+  return await apiFetch<{ success: boolean; message: string }>('/api/auth/send-otp', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function verifyOtpApi(data: {
+  email: string
+  otp_code: string
+  password: string
+  full_name: string
+  role: 'PATIENT' | 'DOCTOR'
+}): Promise<AuthResponse> {
+  const res = await apiFetch<AuthResponse>('/api/auth/verify-otp', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+  if (typeof window !== 'undefined' && res.access_token) {
+    localStorage.setItem('medbook_token', res.access_token)
+    localStorage.setItem('medbook_user', JSON.stringify(res.user))
+    localStorage.setItem(
+      'medbook_doctor_setup_completed',
+      String(res.is_doctor_setup_completed ?? (res.user.role === 'PATIENT' ? true : false))
+    )
+    localStorage.setItem(
+      'medbook_auth',
+      JSON.stringify({
+        loggedIn: true,
+        role: res.user.role.toLowerCase(),
+        name: res.user.fullName,
+        email: res.user.email,
+        id: res.user.id,
+      })
+    )
+  }
+
+  return res
+}
+
+
 export async function loginUser(data: LoginData): Promise<AuthResponse> {
   const res = await apiFetch<AuthResponse>('/api/auth/login', {
     method: 'POST',
